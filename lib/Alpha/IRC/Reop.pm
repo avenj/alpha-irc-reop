@@ -25,9 +25,8 @@ has 'config' => (
   required => 1,
   is       => 'ro',
   isa      => sub {
-    blessed $_[0]
-    and $_[0]->isa('Alpha::IRC::Config')
-    or  confess "$_[0] is not an Alpha::IRC::Config"
+    blessed $_[0] and $_[0]->isa('Alpha::IRC::Config')
+    or confess "$_[0] is not an Alpha::IRC::Config"
   },
 );
 
@@ -48,6 +47,17 @@ has 'pending_ops' => (
   is      => 'ro',
   writer  => 'set_pending_ops',
   default => sub {  {}  },
+);
+
+has 'pocoirc' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_pocoirc',
+  predicate => 1,
+  isa       => sub {
+    blessed $_[0] and $_[0]->isa('POE::Component::IRC')
+    or confess "$_[0] is not a POE::Component::IRC"
+  },
 );
 
 
@@ -88,7 +98,7 @@ sub _start {
 
   $irc->plugin_add() ## FIXME Connector, AutoJoin, NickServID ?
 
-  $heap->{irc} = $irc;
+  $self->set_pocoirc($irc);
 
   $irc->yield(register => 'all');
 
@@ -128,8 +138,24 @@ sub irc_quit {
 ## ac_* states
 
 sub ac_check_lastseen {
+  my ($self, $kernel) = @_;
   ## Check lastseen users to see if anyone should have modes
   ## removed (configurable delta)
+
+  my $channel = $_[ARG0];
+
+  for my $nick (keys %{ $self->current_ops }) {
+    my $last_ts = $self->current_ops->{$nick};
+    ## FIXME ->
+    my $allowable = $self->config->channels->{$channel}->delta;
+    if (time - $last_ts >= $allowable) {
+      ## FIXME get all (configured..?) status modes for this user
+      ##  (check State docs on this)
+      ##  drop them and add the mode chars to pending_ops
+    }
+  }
+
+  ## FIXME reset timer
 }
 
 1;

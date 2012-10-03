@@ -22,6 +22,7 @@ has 'server' => (
 );
 
 has 'channels' => (
+  ## FIXME class for channel-specific settings?
   required  => 1,
   is        => 'ro',
   writer    => 'set_channels',
