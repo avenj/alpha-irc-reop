@@ -1,6 +1,10 @@
 package Alpha::IRC::Reop;
 our $VERSION = '0.01';
 
+## FIXME
+##  - Needs to handle public actions the same way as irc_public
+##  - Batch mode changes? Requires pulling ISUPPORT MODES=
+
 ## Require recent perl:
 use 5.10.1;
 ## More useful complaints/exceptions with caller details:
