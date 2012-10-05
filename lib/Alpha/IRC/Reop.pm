@@ -244,7 +244,9 @@ sub irc_public {
       delete $self->_pending_ops->{$channel}->{$nick};
 
       unless ($self->pocoirc->is_channel_operator($channel, $own_nick)) {
-        $self->__try_reop($channel)
+        $self->__try_reop($channel);
+        ## FIXME should probably move to event-based interface
+        ##  and add a delay after try_reop?
       }
 
       if ( $self->config->has_up_sequence ) {
@@ -413,7 +415,10 @@ sub ac_check_lastseen {
 
   my $own_nick = $self->pocoirc->nick_name;
   unless ( $self->pocoirc->is_channel_operator($channel, $own_nick) ) {
-    $self->__try_reop($channel)
+    $self->__try_reop($channel);
+
+    $kernel->delay_set( 'ac_check_lastseen', 2, $channel );
+    return
   }
 
   ## Check our tracked current ops.
