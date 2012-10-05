@@ -1,11 +1,6 @@
 package Alpha::IRC::Reop;
 our $VERSION = '0.01';
 
-## FIXME
-##  - Batch mode changes? Requires pulling ISUPPORT MODES=
-## Untested:
-##  - Reop-self sequences
-
 ## Require recent perl:
 use 5.10.1;
 ## More useful complaints/exceptions with caller details:
