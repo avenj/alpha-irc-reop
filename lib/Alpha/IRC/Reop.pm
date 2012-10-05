@@ -268,7 +268,7 @@ sub irc_chan_sync {
   ## Grab current users-with-status
   for my $nick ( $self->pocoirc->channel_list($chan) ) {
     $nick = lc_irc( $nick, $self->casemap );
-    next unless $self->pocoirc->is_operator($chan, $nick);
+    next unless $self->pocoirc->is_channel_operator($chan, $nick);
     $self->_current_ops->{$chan}->{$nick} = time();
   }
 
@@ -385,7 +385,7 @@ sub irc_quit {
 ## ac_* states
 
 sub ac_check_lastseen {
-  my ($self, $kernel) = @_;
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
   ## Check lastseen users to see if anyone should have modes
   ## removed (configurable delta)
 
@@ -407,6 +407,10 @@ sub ac_check_lastseen {
 
   ## Check our tracked current ops.
   for my $nick (keys %{ $self->_current_ops->{$channel} }) {
+    if ( eq_irc($nick, $self->pocoirc->nick_name, $self->casemap) ) {
+      ## This is us.
+      next
+    }
 
     unless ( $self->pocoirc->is_channel_operator($channel, $nick) ) {
       ## User not an operator.
