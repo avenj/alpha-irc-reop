@@ -362,18 +362,12 @@ sub irc_chan_mode {
 
   $nick = lc_irc($nick, $self->casemap);
 
-  if ( eq_irc($nick, $self->pocoirc->nick_name, $self->casemap) ) {
-    ## Mode changed by us; we don't care, we adjusted elsewhere.
-    return
-  }
-
   for ($type) {
     when ('+') {
       ## User gained +o ; add to _current_ops
       $self->_current_ops->{$channel}->{$nick} = time();
     }
     when ('-') {
-      ## Someone else deopped this user.
       ## Remove from _current_ops
       delete $self->_current_ops->{$channel}->{$nick}
         if exists $self->_current_ops->{$channel}->{$nick}
