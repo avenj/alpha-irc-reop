@@ -211,12 +211,12 @@ sub from_file {
 sub dump_example {
   my ($self) = @_;
   my @example = readline(DATA);
-  join "\n", @example;
+  join '', @example;
 }
 
 1;
 
-__END__
+__DATA__
 ## Example config
 ---
 Local:

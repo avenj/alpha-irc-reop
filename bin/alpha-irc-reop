@@ -27,6 +27,7 @@ sub helpme_i_am_in_hell {
   print( join "\n",
     "Invocation\n",
     "  --help            Show this help message",
+    "  --exampleconf     Dump an example conf file and exit",
     "  --nodetach        Run in foreground",
     "  --config <FILE>   Configuration file to use",
     "  --piddir <DIR>    PID file storage location [/var/run]",

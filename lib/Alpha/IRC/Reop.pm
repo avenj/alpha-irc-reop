@@ -8,6 +8,7 @@ use Carp;
 
 ## Moo all the things \o/
 use Moo;
+use strictures 1;
 
 ## POE supports list-style module imports:
 use POE qw/
@@ -20,7 +21,7 @@ use POE qw/
 
 use IRC::Utils qw/
   parse_user
-  uc_irc lc_irc
+  eq_irc uc_irc lc_irc
 /;
 
 use Scalar::Util 'blessed';
@@ -43,8 +44,8 @@ has 'config' => (
   required => 1,
   is       => 'ro',
   isa      => sub {
-    blessed $_[0] and $_[0]->isa('Alpha::IRC::Config')
-    or confess "$_[0] is not an Alpha::IRC::Config"
+    blessed $_[0] and $_[0]->isa('Alpha::IRC::Reop::Config')
+    or confess "$_[0] is not an Alpha::IRC::Reop::Config"
   },
 );
 
@@ -95,7 +96,6 @@ sub BUILD {
         irc_001
         irc_chan_mode
         irc_chan_sync
-        irc_disconnected
         irc_kick
         irc_nick
         irc_part
@@ -439,7 +439,7 @@ sub ac_check_lastseen {
   }
 
   ## Check for idle ops again in five seconds.
-  $self->delay_set( 'ac_check_lastseen', 5, $channel );
+  $kernel->delay_set( 'ac_check_lastseen', 5, $channel );
 }
 
 
