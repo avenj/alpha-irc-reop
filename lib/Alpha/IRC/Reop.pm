@@ -7,8 +7,6 @@ use Carp;
 
 ## Moo all the things \o/
 use Moo;
-## ' use strict; use warnings FATAL => "all"; '
-use strictures 1;
 
 ## POE supports list-style module imports:
 use POE qw/
@@ -128,8 +126,11 @@ sub __try_reop {
 
   return unless $self->config->has_reop_sequence;
 
-  $self->pocoirc->yield( sl_high => $_ )
-    for @{ $self->config->reop_sequence };
+  for my $line (@{ $self->config->reop_sequence }) {
+    $self->pocoirc->yield( sl_high =>
+      sprintf($line, $channel, $self->pocoirc->nick_name)
+    );
+  }
 }
 
 
@@ -172,7 +173,8 @@ sub _start {
       POE::Component::IRC::Plugin::NickServID->new(
         Password => $self->config->nickserv_pass,
       ),
-  );
+    );
+  }
 
   my @channels = keys %{ $self->config->channels };
   my %ajoin_prefs;
@@ -203,9 +205,9 @@ sub _start {
 sub irc_001 {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
 
-  $self->set_casemap(
-    $self->pocoirc->isupport('CASEMAP') || 'rfc1459'
-  );
+  my $casemap = $self->pocoirc->isupport('CASEMAP') || 'rfc1459';
+  $self->set_casemap( $casemap );
+  $self->config->normalize_channels( $casemap );
 }
 
 sub irc_public {
@@ -217,6 +219,8 @@ sub irc_public {
   ## If this is a known op update 'lastseen'
   ## If this is a pending op, reop, move to known ops
 
+  my $own_nick = $self->pocoirc->nick_name;
+
   TARGET: for my $channel (map { lc_irc($_, $self->casemap) } @$where) {
 
     if (exists $self->_current_ops->{$channel}->{$nick}) {
@@ -227,8 +231,21 @@ sub irc_public {
     if (exists $self->_pending_ops->{$channel}->{$nick}) {
       delete $self->_pending_ops->{$channel}->{$nick};
 
-      ## FIXME __try_reop($channel) if we're not operator
-      ## FIXME configurable command set (or set +o-v)
+      unless ($self->pocoirc->is_channel_operator($channel, $own_nick)) {
+        $self->__try_reop($channel)
+      }
+
+      if ( $self->config->has_up_sequence ) {
+        for my $line (@{ $self->config->up_sequence }) {
+          $self->pocoirc->yield( sl_high =>
+            sprintf($line, $channel, $nick)
+          );
+        }
+      } else {
+        $self->pocoirc->yield( mode => $channel,
+          '-v+o', ($nick) x 2
+        );
+      }
 
       $self->_current_ops->{$channel}->{$nick} = time();
 
@@ -254,7 +271,8 @@ sub irc_chan_sync {
     $self->_current_ops->{$chan}->{$nick} = time();
   }
 
-  ## FIXME Set ac_check_lastseen timer for this channel
+  ## Start checking for idle ops in 20 seconds.
+  $kernel->delay_set( 'ac_check_lastseen', 20, $chan );
 }
 
 sub irc_kick {
@@ -321,7 +339,7 @@ sub irc_nick {
   ($old, $new) = map { lc_irc($_, $self->casemap) } ($old, $new);
 
   TYPE: for my $type (qw/ _current_ops _pending_ops /) {
-    CHAN: for my $channel { map { lc_irc($_, $self->casemap) } @$common) {
+    CHAN: for my $channel (map { lc_irc($_, $self->casemap) } @$common) {
       next CHAN unless exists $self->$type->{$channel}->{$old};
 
       $self->$type->{$channel}->{$new} =
@@ -381,8 +399,12 @@ sub ac_check_lastseen {
     return
   }
 
-  ## FIXME __try_reop($channel) if we're not operator
+  my $own_nick = $self->pocoirc->nick_name;
+  unless ( $self->pocoirc->is_channel_operator($channel, $own_nick) ) {
+    $self->__try_reop($channel)
+  }
 
+  ## Check our tracked current ops.
   for my $nick (keys %{ $self->_current_ops->{$channel} }) {
 
     unless ( $self->pocoirc->is_channel_operator($channel, $nick) ) {
@@ -392,21 +414,32 @@ sub ac_check_lastseen {
     }
 
     my $last_ts = $self->_current_ops->{$channel}->{$nick};
-    my $allowable = $self->config->channels->{$channel}->delta; # FIXME cfg
+    my $allowable = $self->config->channels->{$channel}->delta;
 
     if (time - $last_ts >= $allowable) {
       ## Exceeded delta, drop modes and add to _pending_ops
 
-      ## FIXME configurable command set (or set -o+v)
+      if ( $self->config->has_down_sequence ) {
+
+        for my $line (@{ $self->config->down_sequence }) {
+          $self->pocoirc->yield( sl_high =>
+            sprintf($line, $channel, $nick)
+          );
+        }
+
+      } else {
+        $self->pocoirc->yield( mode => $channel,
+          '-o+v', ($nick) x 2
+        );
+      }
 
       $self->_pending_ops->{$channel}->{$nick} = 1;
     }
   }
 
-  ## FIXME reset timer
+  ## Check for idle ops again in five seconds.
+  $self->delay_set( 'ac_check_lastseen', 5, $channel );
 }
 
-1;
 
-## FIXME per-channel configurable re-op cmd?
-##  would allow for configurably using bots/services on certain chans
+1;

@@ -6,7 +6,11 @@ use 5.10.1;
 use Moo;
 use strictures 1;
 
+use YAML::XS qw/LoadFile/;
 
+use IRC::Utils qw/ lc_irc /;
+
+## Nick/ident/gecos
 has 'nickname' => (
   required  => 1,
   is        => 'ro',
@@ -14,6 +18,23 @@ has 'nickname' => (
   predicate => 1,
 );
 
+has 'username' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_username',
+  predicate => 1,
+  default   => sub { 'reop' },
+);
+
+has 'realname' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_realname',
+  predicate => 1,
+  default   => sub { 'Alpha-IRC-Reop' },
+);
+
+## Server opts
 has 'server' => (
   required  => 1,
   is        => 'ro',
@@ -21,18 +42,210 @@ has 'server' => (
   predicate => 1,
 );
 
+has 'bindaddr' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_bindaddr',
+  predicate => 1,
+);
+
+has 'ipv6' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_ipv6',
+  predicate => 1,
+  default   => sub { 0 },
+);
+
+has 'password' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_password',
+  predicate => 1,
+);
+
+has 'port' => (
+  required  => 1,
+  is        => 'ro',
+  writer    => 'set_port',
+  predicate => 1,
+  default   => sub { 6667 },
+);
+
+has 'ssl' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_ssl',
+  predicate => 1,
+  default   => sub { 0 },
+);
+
+## Misc
+has 'nickserv_pass' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_nickserv_pass',
+  predicate => 1,
+);
+
+
 has 'channels' => (
-  ## FIXME class for channel-specific settings?
+  ## FIXME hash of channel config objs
+  ## FIXME method(s) to create these from our config
   required  => 1,
   is        => 'ro',
   writer    => 'set_channels',
   predicate => 1,
 );
 
-has 'status_modes' => (
+
+## Reop / up / down sequences
+## ARRAY of commands to execute for certain events
+## Each line is passed channel and nickname respectively & fed to sprintf
+
+has 'reop_sequence' => (
+  ## Regain op for ourself.
+  lazy      => 1,
   is        => 'ro',
-  writer    => 'set_status_modes',
+  writer    => 'set_reop_sequence',
   predicate => 1,
 );
 
+has 'up_sequence' => (
+  ## Re-up an active operator.
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_up_sequence',
+  predicate => 1,
+);
+
+has 'down_sequence' => (
+  ## Downgrade inactive operator.
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_down_sequence',
+  predicate => 1,
+);
+
+
+sub normalize_channels {
+  my ($self, $casemap) = @_;
+  for my $channel (keys %{ $self->channels }) {
+    $self->channels->{ lc_irc($channel, $casemap) }
+      = delete $self->channels->{$channel}
+  }
+}
+
+
+sub from_file {
+  my ($class, $path) = @_;
+
+  my $cfg = LoadFile($path) || confess "LoadFile failed";
+
+  confess "Config not a HASH" unless ref $cfg eq 'HASH';
+
+  my %opts = ( channels => {} );
+
+  for my $toplevel (qw/Local Remote Channels/) {
+    confess "Missing/unparsable required top-level directive $toplevel"
+      unless ref $cfg->{$toplevel} eq 'HASH';
+  }
+
+  ## Can shove validation bits here.
+  for my $local (keys %{ $cfg->{Local} }) {
+    $opts{lc $local} = delete $cfg->{Local}->{$local}
+      if defined $cfg->{Local}->{$local};
+  }
+
+  for my $remote (keys %{ $cfg->{Remote} }) {
+    $opts{lc $remote} = delete $cfg->{Remote}->{$remote}
+      if defined $cfg->{Remote}->{$remote};
+  }
+
+  for my $channel (keys %{ $cfg->{Channels} }) {
+    unless (ref $cfg->{Channels}->{$channel} eq 'HASH') {
+      $cfg->{Channels}->{$channel} = {};
+    }
+
+    my $chan_obj = Alpha::IRC::Reop::Config::Channel->new(
+      ( $cfg->{Channels}->{$channel}->{delta} ?
+         (delta => $cfg->{Channels}->{$channel}->{delta}) : ()
+      ),
+      ( $cfg->{Channels}->{$channel}->{key} ?
+         (key => $cfg->{Channels}->{$channel}->{key}) : ()
+      ),
+    );
+
+    $opts{channels}->{$channel} = $chan_obj
+  }
+
+  if (ref $cfg->{Sequences} eq 'HASH') {
+    TYPE: for my $type (keys %{ $cfg->{Sequences} }) {
+      confess "Sequences -> $type not an ARRAY"
+        unless ref $cfg->{Sequences}->{$type} eq 'ARRAY';
+
+      SEQ: {
+        if ($type eq 'ReopSelf') {
+          $opts{reop_sequence} = delete $cfg->{Sequences}->{$type};
+          last SEQ
+        }
+
+        if ($type eq 'UpUser') {
+          $opts{up_sequence} = delete $cfg->{Sequences}->{$type};
+          last SEQ
+        }
+
+        if ($type eq 'DownUser') {
+          $opts{down_sequence} = delete $cfg->{Sequences}->{$type};
+          last SEQ
+        }
+
+        confess "Unknown directive $type in Sequences"
+      } # SEQ
+    } # TYPE
+  }
+
+  $class->new(%opts)
+}
+
+sub dump_example {
+  my ($self) = @_;
+  my @example = readline(DATA);
+  print join "\n", @example;
+}
+
 1;
+
+__END__
+## Example config
+---
+Local:
+  Nickname: "AlphaReop"
+  Username: "alpha"
+  Realname: "reop bot"
+
+Remote:
+  Server: "irc.alphairc.net"
+  Port: 6667
+  BindAddr: ~
+  SSL: 0
+  IPv6: 0
+  Password: ~
+  NickServ_Pass: "somepassword"
+
+Channels:
+  '#lobby':
+    delta: 900
+    key: ~
+
+Sequences:
+  ReopSelf:
+    - PRIVMSG ChanServ :OP %s %s
+
+  UpUser:
+    - PRIVMSG ChanServ :OP %s %s
+    - PRIVMSG ChanServ :DEVOICE %s %s
+
+  DownUser:
+    - PRIVMSG ChanServ :DEOP %s %s
+    - PRIVMSG ChanServ :VOICE %s %s
