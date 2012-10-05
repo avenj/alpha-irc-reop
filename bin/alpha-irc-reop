@@ -3,6 +3,8 @@
 use 5.10.1;
 use strictures 1;
 
+use File::Spec;
+
 use POE;
 
 use Proc::PID::File;
@@ -37,23 +39,6 @@ sub helpme_i_am_in_hell {
   exit 0
 }
 
-sub fork_dance {
-  require POSIX;
-  say "Detaching";
-  my $fork = fork;
-  exit 1 if not defined $fork;
-  exit 0 if $fork;
-  POSIX::setsid();
-  $fork = fork;
-  exit 1 if not defined $fork;
-  exit 0 if $fork;
-  chdir('/');
-  open(STDIN, '<', '/dev/null');
-  open(STDOUT, '>>', '/dev/null');
-  open(STDERR, '>>', '/dev/null');
-  umask(022);
-}
-
 sub fire_it_up {
   my $pidname = $opts->{pidname} || 'alphareop';
   my $pid = Proc::PID::File->new(
@@ -66,11 +51,25 @@ sub fire_it_up {
 
   say "Starting . . .";
 
-  fork_dance() if $opts->{detach};
+  my $cfg  = Alpha::IRC::Reop::Config->from_file( $opts->{config} );
+
+  if ($opts->{detach}) {
+    require POSIX;
+    my $fork = fork;
+    exit 1 if not defined $fork;
+    exit 0 if $fork;
+    POSIX::setsid();
+    $fork = fork;
+    exit 1 if not defined $fork;
+    exit 0 if $fork;
+    chdir('/');
+#    open(STDIN, '<', '/dev/null');
+#    open(STDOUT, '>>', '/dev/null');
+#    open(STDERR, '>>', '/dev/null');
+    umask(022);
+  }
 
   $pid->touch;
-
-  my $cfg  = Alpha::IRC::Reop::Config->from_file( $opts->{config} );
   my $reop = Alpha::IRC::Reop->new( config => $cfg );
   POE::Kernel->run;
 }
