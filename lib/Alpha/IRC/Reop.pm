@@ -483,8 +483,8 @@ sub ac_check_lastseen {
     }
 
     my $last_ts   = $self->_current_ops->{$channel}->{$nick};
-    my $ccfg      = $self->config->channels->{$channel} || return;
-    my $allowable = $ccfg->delta;
+    my $ccfg      = $self->config->channels->{$channel};
+    my $allowable = blessed $ccfg ? $ccfg->delta : 900 ;
 
     if (time - $last_ts >= $allowable) {
       ## Exceeded delta, drop modes and add to _pending_ops
