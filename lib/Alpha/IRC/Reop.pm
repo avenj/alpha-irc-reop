@@ -324,6 +324,10 @@ sub irc_chan_sync {
     $self->_current_ops->{$chan}->{$nick} = time();
   }
 
+  my $own_nick = $self->pocoirc->nick_name;
+  $self->__try_reop($chan)
+    unless $self->pocoirc->is_channel_operator( $chan, $own_nick );
+
   ## Start checking for idle ops in 20 seconds.
   $kernel->delay_set( 'ac_check_lastseen', 20, $chan );
 }
@@ -370,6 +374,8 @@ sub irc_chan_mode {
         if exists $self->_pending_ops->{$channel}->{$nick}
     }
     when ('-') {
+      $self->__try_reop($channel)
+        if eq_irc( $nick, $self->pocoirc->nick_name, $self->casemap );
       ## Remove from _current_ops
       ## Doesn't add to pending_ops:
       ##  - If we changed this mode, we tweaked pending_ops
