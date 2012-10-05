@@ -27,6 +27,8 @@ my $build = Module::Build->new(
     'POE'                 => '1.3',
     'POE::Component::IRC' => '6.80',
 
+    'Proc::PID::File'     => 0,
+
     'YAML::XS'            => 0,
   },
 );
