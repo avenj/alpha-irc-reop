@@ -109,6 +109,9 @@ sub BUILD {
         irc_public
         irc_quit
       / ],
+      $self => {
+        irc_ctcp_action => 'irc_public',
+      },
     ],
   );
 }
@@ -231,6 +234,8 @@ sub irc_public {
   my $own_nick = $self->pocoirc->nick_name;
 
   TARGET: for my $channel (map { lc_irc($_, $self->casemap) } @$where) {
+    ## ctcp_action is mapped here; ignore private actions:
+    next TARGET unless $channel =~ /^[+&#]/;
 
     if (exists $self->_current_ops->{$channel}->{$nick}) {
       $self->_current_ops->{$channel}->{$nick} = time();

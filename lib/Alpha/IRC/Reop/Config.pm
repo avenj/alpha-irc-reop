@@ -239,6 +239,7 @@ Channels:
     key: ~
 
 Sequences:
+  ## Passed channel and nickname respectively
   ReopSelf:
     - PRIVMSG ChanServ :OP %s %s
 
