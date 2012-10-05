@@ -12,7 +12,7 @@ my $build = Module::Build->new(
   create_readme => 1,
   create_makefile_pl => 'small',
   requires => {
-    perl       => '5.12.1',
+    perl       => '5.10.1',
     Carp       => 0,
 
     strictures              => 1,
