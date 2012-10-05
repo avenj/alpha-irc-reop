@@ -8,21 +8,26 @@ my $build = Module::Build->new(
   license       => 'perl',
   dist_abstract => 'Silly reop bot because I love Joah.',
   dist_author   => 'Fidel Castro <avenj@cobaltirc.org>',
-#  recursive_test_files => 1,
+  recursive_test_files => 1,
   create_readme => 1,
   create_makefile_pl => 'small',
   requires => {
     perl       => '5.12.1',
     Carp       => 0,
 
-    strictures => 1,
+    strictures              => 1,
+    indirect                => 0,
+    multidimensional        => 0,
+    'bareword::filehandles' => 0,
 
-    Moo        => 1,
+    Moo                   => 1,
     'namespace::clean'    => '0.23',
 
-    'IRC::Utils'          => 1,
+    'IRC::Utils'          => 0,
     'POE'                 => '1.3',
-    'POE::Component::IRC' => 6,
+    'POE::Component::IRC' => '6.80',
+
+    'YAML::XS'            => 0,
   },
 );
 

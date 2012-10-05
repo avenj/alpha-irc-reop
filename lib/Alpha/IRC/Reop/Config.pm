@@ -10,6 +10,8 @@ use YAML::XS qw/LoadFile/;
 
 use IRC::Utils qw/ lc_irc /;
 
+use Alpha::IRC::Reop::Config::Channel;
+
 ## Nick/ident/gecos
 has 'nickname' => (
   required  => 1,
