@@ -508,7 +508,7 @@ sub ac_check_lastseen {
   if (@targets) {
     if (@targets == 1) {
       $self->pocoirc->yield( mode => $channel,
-        '+v-o' . ($targets[0]) x 2
+        '+v-o', ($targets[0]) x 2
       );
     } else {
       $self->__issue_voice($channel, @targets);
