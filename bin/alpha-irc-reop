@@ -8,7 +8,7 @@ use POE;
 use Proc::PID::File;
 
 use Getopt::Long;
-my $opts = {};
+my $opts = { detach => 1 };
 GetOptions( $opts,
   'help',
   'exampleconf|examplecf',
