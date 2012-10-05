@@ -4,6 +4,9 @@ our $VERSION = '0.01';
 ## FIXME
 ##  - Needs to handle public actions the same way as irc_public
 ##  - Batch mode changes? Requires pulling ISUPPORT MODES=
+## Untested:
+##  - Sequences
+##  - Whether irc_mode does the Right Thing
 
 ## Require recent perl:
 use 5.10.1;
