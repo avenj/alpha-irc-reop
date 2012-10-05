@@ -506,8 +506,14 @@ sub ac_check_lastseen {
   }
 
   if (@targets) {
-    $self->__issue_voice($channel, @targets);
-    $self->__remove_op($channel, @targets);
+    if (@targets == 1) {
+      $self->pocoirc->yield( mode => $channel,
+        '+v-o' . ($targets[0]) x 2
+      );
+    } else {
+      $self->__issue_voice($channel, @targets);
+      $self->__remove_op($channel, @targets);
+   }
   }
 
   ## Check for idle ops again in 15 seconds.
