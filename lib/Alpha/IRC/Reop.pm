@@ -278,8 +278,8 @@ sub irc_chan_sync {
 
   ## Grab current users-with-status
   for my $nick ( $self->pocoirc->channel_list($chan) ) {
-    $nick = lc_irc( $nick, $self->casemap );
     next unless $self->pocoirc->is_channel_operator($chan, $nick);
+    $nick = lc_irc( $nick, $self->casemap );
     $self->_current_ops->{$chan}->{$nick} = time();
   }
 
