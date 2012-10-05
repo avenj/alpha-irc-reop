@@ -150,6 +150,7 @@ sub _start {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
 
   my $irc = POE::Component::IRC::State->spawn(
+    flood    => 1,
     nick     => $self->config->nickname,
     username => $self->config->username,
     ircname  => $self->config->realname,
