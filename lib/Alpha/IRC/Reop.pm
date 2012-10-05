@@ -223,8 +223,8 @@ sub irc_001 {
 }
 
 sub irc_public {
-  my ($kernel, $self)     = @_[KERNEL, OBJECT];
-  my ($src, $where, $txt) = @_[ARG0 .. ARG2];
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+  my ($src, $where)   = @_[ARG0, ARG1];
 
   my $nick = lc_irc( parse_user($src), $self->casemap );
 
