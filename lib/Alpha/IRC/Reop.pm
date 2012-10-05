@@ -1,4 +1,5 @@
 package Alpha::IRC::Reop;
+our $VERSION = '0.01';
 
 ## Require recent perl:
 use 5.10.1;

@@ -1,0 +1,90 @@
+#!/usr/bin/env perl
+
+use 5.10.1;
+use strictures 1;
+
+use POE;
+
+use Proc::PID::File;
+
+use Getopt::Long;
+my $opts = {};
+GetOptions( $opts,
+  'help',
+  'exampleconf|examplecf',
+
+  'detach!',
+  'config=s',
+  'piddir=s',
+  'pidname=s',
+
+);
+
+use Alpha::IRC::Reop;
+use Alpha::IRC::Reop::Config;
+
+sub helpme_i_am_in_hell {
+  print( join "\n",
+    "Invocation\n",
+    "  --help            Show this help message",
+    "  --nodetach        Run in foreground",
+    "  --config <FILE>   Configuration file to use",
+    "  --piddir <DIR>    PID file storage location [/var/run]",
+    "  --pidname <NAME>  PID file name without suffix [alphareop]",
+    ""
+  );
+  exit 0
+}
+
+sub fork_dance {
+  require POSIX;
+  say "Detaching";
+  my $fork = fork;
+  exit 1 if not defined $fork;
+  exit 0 if $fork;
+  POSIX::setsid();
+  $fork = fork;
+  exit 1 if not defined $fork;
+  exit 0 if $fork;
+  chdir('/');
+  open(STDIN, '<', '/dev/null');
+  open(STDOUT, '>>', '/dev/null');
+  open(STDERR, '>>', '/dev/null');
+  umask(022);
+}
+
+sub fire_it_up {
+  my $pidname = $opts->{pidname} || 'alphareop';
+  my $pid = Proc::PID::File->new(
+    name => $pidname,
+    ( $opts->{piddir} ? (dir  => $opts->{piddir}) : () ),
+  );
+
+  die "Appears to be already running\n"
+    if $pid->alive;
+
+  say "Starting . . .";
+
+  fork_dance() if $opts->{detach};
+
+  $pid->touch;
+
+  my $cfg  = Alpha::IRC::Reop::Config->from_file( $opts->{config} );
+  my $reop = Alpha::IRC::Reop->new( config => $cfg );
+  POE::Kernel->run;
+}
+
+if ($opts->{help}) {
+  helpme_i_am_in_hell();
+}
+
+if ($opts->{exampleconf}) {
+  my $examplecf = Alpha::IRC::Reop::Config->dump_example;
+  print $examplecf . "\n";
+  exit 0
+}
+
+die "No config file specified\n"
+  unless defined $opts->{config};
+
+fire_it_up();

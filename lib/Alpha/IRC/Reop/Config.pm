@@ -92,8 +92,6 @@ has 'nickserv_pass' => (
 
 
 has 'channels' => (
-  ## FIXME hash of channel config objs
-  ## FIXME method(s) to create these from our config
   required  => 1,
   is        => 'ro',
   writer    => 'set_channels',
@@ -213,7 +211,7 @@ sub from_file {
 sub dump_example {
   my ($self) = @_;
   my @example = readline(DATA);
-  print join "\n", @example;
+  join "\n", @example;
 }
 
 1;
@@ -227,7 +225,7 @@ Local:
   Realname: "reop bot"
 
 Remote:
-  Server: "irc.alphairc.net"
+  Server: "irc.alphachat.net"
   Port: 6667
   BindAddr: ~
   SSL: 0
