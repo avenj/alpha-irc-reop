@@ -450,8 +450,8 @@ sub ac_check_lastseen {
     }
   }
 
-  ## Check for idle ops again in five seconds.
-  $kernel->delay_set( 'ac_check_lastseen', 5, $channel );
+  ## Check for idle ops again in 15 seconds.
+  $kernel->delay_set( 'ac_check_lastseen', 15, $channel );
 }
 
 
