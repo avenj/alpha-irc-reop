@@ -43,6 +43,7 @@ has 'casemap' => (
   is        => 'ro',
   writer    => 'set_casemap',
   predicate => 1,
+  default   => sub { 'rfc1459' },
 );
 
 has 'config' => (
@@ -142,6 +143,48 @@ sub __try_reop {
   }
 }
 
+sub __issue_modes {
+  ## ->__issue_modes($channel, '+', 'v', @nicks)  # f.ex
+  my ($self, $channel, $type, $mode, @nicknames) = @_;
+
+  confess "Expected channel, + or - flag, mode, and list of targets"
+    unless @nicknames;
+
+  my $max = $self->pocoirc->isupport('MODES') || 3;
+
+  my @targets;
+
+  while (my $nick = shift @nicknames) {
+    push(@targets, $nick);
+    if (!@nicknames || @targets == $max) {
+      $self->pocoirc->yield( mode => $channel,
+        $type . ( $mode x @targets),
+        @targets
+      );
+      @targets = ();
+    }
+  }
+}
+
+sub __issue_voice {
+  my ($self, $channel, @nicknames) = @_;
+  $self->__issue_modes( $channel, '+', 'v', @nicknames )
+}
+
+sub __remove_voice {
+  my ($self, $channel, @nicknames) = @_;
+  $self->__issue_modes( $channel, '-', 'v', @nicknames )
+}
+
+sub __issue_op {
+  my ($self, $channel, @nicknames) = @_;
+  $self->__issue_modes( $channel, '+', 'o', @nicknames )
+}
+
+sub __remove_op {
+  my ($self, $channel, @nicknames) = @_;
+  $self->__issue_modes( $channel, '-', 'o', @nicknames )
+}
 
 ## POE states.
 sub _start {
@@ -422,6 +465,8 @@ sub ac_check_lastseen {
     return
   }
 
+  my @targets;
+
   ## Check our tracked current ops.
   for my $nick (keys %{ $self->_current_ops->{$channel} }) {
     if ( eq_irc($nick, $self->pocoirc->nick_name, $self->casemap) ) {
@@ -450,13 +495,16 @@ sub ac_check_lastseen {
         }
 
       } else {
-        $self->pocoirc->yield( mode => $channel,
-          '-o+v', ($nick) x 2
-        );
+        push @targets, $nick
       }
 
       $self->_pending_ops->{$channel}->{$nick} = 1;
     }
+  }
+
+  if (@targets) {
+    $self->__issue_voice($channel, @targets);
+    $self->__remove_op($channel, @targets);
   }
 
   ## Check for idle ops again in 15 seconds.
