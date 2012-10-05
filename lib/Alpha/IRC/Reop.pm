@@ -366,9 +366,14 @@ sub irc_chan_mode {
     when ('+') {
       ## User gained +o ; add to _current_ops
       $self->_current_ops->{$channel}->{$nick} = time();
+      delete $self->_pending_ops->{$channel}->{$nick}
+        if exists $self->_pending_ops->{$channel}->{$nick}
     }
     when ('-') {
       ## Remove from _current_ops
+      ## Doesn't add to pending_ops:
+      ##  - If we changed this mode, we tweaked pending_ops
+      ##  - If someone else did, trust the change and stop watching
       delete $self->_current_ops->{$channel}->{$nick}
         if exists $self->_current_ops->{$channel}->{$nick}
     }
