@@ -247,6 +247,7 @@ sub irc_public {
         $self->__try_reop($channel);
         ## FIXME should probably move to event-based interface
         ##  and add a delay after try_reop?
+        ##  would need to track retries and increment timer for them
       }
 
       if ( $self->config->has_up_sequence ) {
@@ -416,8 +417,8 @@ sub ac_check_lastseen {
   my $own_nick = $self->pocoirc->nick_name;
   unless ( $self->pocoirc->is_channel_operator($channel, $own_nick) ) {
     $self->__try_reop($channel);
-
-    $kernel->delay_set( 'ac_check_lastseen', 2, $channel );
+    ## Skip this run and try again when we're hopefully opped.
+    $kernel->delay_set( 'ac_check_lastseen', 15, $channel );
     return
   }
 
