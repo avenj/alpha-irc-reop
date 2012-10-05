@@ -469,14 +469,22 @@ sub ac_check_lastseen {
       next
     }
 
+    if ( $self->config->has_excepted
+      && grep { eq_irc($_, $nick, $self->casemap) }
+        @{ $self->config->excepted } ) {
+      ## Excepted nickname.
+      next
+    }
+
     unless ( $self->pocoirc->is_channel_operator($channel, $nick) ) {
       ## User not an operator.
       delete $self->_current_ops->{$channel}->{$nick};
       next
     }
 
-    my $last_ts = $self->_current_ops->{$channel}->{$nick};
-    my $allowable = $self->config->channels->{$channel}->delta;
+    my $last_ts   = $self->_current_ops->{$channel}->{$nick};
+    my $ccfg      = $self->config->channels->{$channel} || return;
+    my $allowable = $ccfg->delta;
 
     if (time - $last_ts >= $allowable) {
       ## Exceeded delta, drop modes and add to _pending_ops

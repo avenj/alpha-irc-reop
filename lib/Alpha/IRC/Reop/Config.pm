@@ -128,6 +128,14 @@ has 'down_sequence' => (
 );
 
 
+has 'excepted' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_excepted',
+  predicate => 1,
+  default   => sub {  []  },
+);
+
 sub normalize_channels {
   my ($self, $casemap) = @_;
   for my $channel (keys %{ $self->channels }) {
@@ -149,6 +157,10 @@ sub from_file {
   for my $toplevel (qw/Local Remote Channels/) {
     confess "Missing/unparsable required top-level directive $toplevel"
       unless ref $cfg->{$toplevel} eq 'HASH';
+  }
+
+  if (ref $cfg->{Excepted} eq 'ARRAY') {
+    $opts{excepted} = $cfg->{Excepted}
   }
 
   ## Can shove validation bits here.
@@ -237,6 +249,9 @@ Channels:
   '#lobby':
     delta: 900
     key: ~
+
+Excepted:
+  - "spork"
 
 Sequences:
   ## Passed channel and nickname respectively
