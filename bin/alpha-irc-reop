@@ -23,6 +23,8 @@ GetOptions( $opts,
 
 );
 
+$opts->{detach} = 0 if $opts->{debug};
+
 use Alpha::IRC::Reop;
 use Alpha::IRC::Reop::Config;
 

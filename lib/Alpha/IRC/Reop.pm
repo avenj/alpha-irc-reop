@@ -1,16 +1,12 @@
 package Alpha::IRC::Reop;
 our $VERSION = '0.01';
 
-## Require recent perl:
 use 5.10.1;
-## More useful complaints/exceptions with caller details:
 use Carp;
 
-## Moo all the things \o/
 use Moo;
 use strictures 1;
 
-## POE supports list-style module imports:
 use POE qw/
   Component::IRC::State
   Component::IRC::Plugin::AutoJoin
@@ -26,8 +22,7 @@ use IRC::Utils qw/
 
 use Scalar::Util 'blessed';
 
-## Every sub imported before this 'use' is assumed to be
-## not-a-method and cleaned:
+
 use namespace::clean -except => 'meta';
 
 
@@ -117,7 +112,7 @@ sub BUILD {
 
 ## Utility methods.
 sub dbwarn (@) {
-  warn @_, "\n"
+  warn map {; ( (caller(1))[3] || '' )." $_\n" } @_
 }
 
 sub __clear_all {
@@ -128,7 +123,7 @@ sub __clear_all {
   ($channel, $nick) = map { lc_irc($_, $self->casemap) } ($channel, $nick);
 
   for my $type (qw/ _current_ops _pending_ops /) {
-    dbwarn "__clear_all $type $channel $nick" if $self->debug;
+    dbwarn "clearing $type $channel $nick" if $self->debug;
     delete $self->$type->{$channel}->{$nick}
       if exists $self->$type->{$channel}->{$nick}
   }
@@ -141,7 +136,7 @@ sub __try_reop {
 
   return unless $self->config->has_reop_sequence;
 
-  dbwarn "Trying to regain ops" if $self->debug;
+  dbwarn "trying to regain ops on $channel" if $self->debug;
 
   for my $line (@{ $self->config->reop_sequence }) {
     $self->pocoirc->yield( sl_high =>
@@ -201,7 +196,7 @@ sub _start {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
 
   if ($self->debug) {
-    dbwarn "CONFIG:\n", $self->config->dumped;
+    warn "-> current config:\n", $self->config->dumped;
   }
 
   my $irc = POE::Component::IRC::State->spawn(
@@ -271,7 +266,7 @@ sub irc_001 {
 
   my $casemap = $self->pocoirc->isupport('CASEMAP') || 'rfc1459';
 
-  dbwarn "initializing CASEMAP $casemap";
+  dbwarn "connected, setting CASEMAP $casemap" if $self->debug;
 
   $self->set_casemap( $casemap );
   $self->config->normalize_channels( $casemap );
@@ -294,7 +289,7 @@ sub irc_public {
 
     if (exists $self->_current_ops->{$channel}->{$nick}) {
       $self->_current_ops->{$channel}->{$nick} = time();
-      dbwarn "Updated _current_ops $channel $nick" if $self->debug;
+      dbwarn "updated _current_ops $channel $nick" if $self->debug;
       next TARGET
     }
 
@@ -409,7 +404,7 @@ sub irc_chan_mode {
   for ($type) {
     when ('+') {
       ## User gained +o ; add to _current_ops
-      dbwarn "irc_chan_mode; _current_ops added $channel $nick"
+      dbwarn "_current_ops added $channel $nick"
         if $self->debug;
 
       $self->_current_ops->{$channel}->{$nick} = time();
@@ -427,7 +422,7 @@ sub irc_chan_mode {
       ## Doesn't add to pending_ops:
       ##  - If we changed this mode, we tweaked pending_ops
       ##  - If someone else did, trust the change and stop watching
-      dbwarn "irc_chan_mode; _current_ops dropped $channel $nick"
+      dbwarn "_current_ops dropped $channel $nick"
         if $self->debug;
 
       delete $self->_current_ops->{$channel}->{$nick}
@@ -450,7 +445,7 @@ sub irc_nick {
     CHAN: for my $channel (map { lc_irc($_, $self->casemap) } @$common) {
       next CHAN unless exists $self->$type->{$channel}->{$old};
 
-      dbwarn "irc_nick adjusted $type $channel $old -> $new"
+      dbwarn "nick adjusted $type $channel $old -> $new"
         if $self->debug;
 
       $self->$type->{$channel}->{$new} =
@@ -476,6 +471,8 @@ sub irc_part {
     return
   }
 
+  dbwarn "PART seen ($channel $nick), calling __clear_all"
+    if $self->debug;
   $self->__clear_all( $channel, $nick );
 }
 
@@ -505,7 +502,7 @@ sub ac_check_lastseen {
 
   my $channel = $_[ARG0];
 
-  dbwarn "ac_check_lastseen for $channel" if $self->debug;
+  dbwarn "timer fired ac_check_lastseen for $channel" if $self->debug;
 
   unless ( $self->pocoirc->channel_list($channel) ) {
     ## Lost this channel. May be a stale timer.
