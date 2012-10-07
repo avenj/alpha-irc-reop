@@ -18,3 +18,31 @@ has 'key' => (
 );
 
 1;
+
+=pod
+
+=head1 NAME
+
+IRC::Reop::Config::Channel
+
+=head1 SYNOPSIS
+
+  my $delta = $cfg_obj->channels->{ $chan }->delta;
+
+=head1 DESCRIPTION
+
+Configuration for a single channel.
+
+=head2 delta
+
+The allowable per-user idle delta for this channel.
+
+=head2 key
+
+A key needed to rejoin this channel.
+
+=head1 AUTHOR
+
+Jon Portnoy <avenj@cobaltirc.org>
+
+=cut

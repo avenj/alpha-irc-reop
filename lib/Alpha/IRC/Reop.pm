@@ -598,3 +598,63 @@ sub ac_check_lastseen {
 
 
 1;
+
+=pod
+
+=head1 NAME
+
+Alpha::IRC::Reop - Automatically manage idle IRC chanops
+
+=head1 SYNOPSIS
+
+  use POE;
+  use Alpha::IRC::Reop;
+  use Alpha::IRC::Reop::Config;
+
+  my $alpha = Alpha::IRC::Reop->new(
+    debug  => 0,
+    config => Alpha::IRC::Reop::Config->from_file( $cfg_path ),
+  );
+
+  $poe_kernel->run;
+
+=head1 DESCRIPTION
+
+Joins configured channels and begins monitoring opped users.
+
+If a user does not speak for a configurable amount of time, a configured
+'DownSequence' is executed, or mode C<-o+v> is set if a DownSequence is
+not specified. When the user resumes activity on the channel, an
+'UpSequence' is executed, or mode C<+o-v> is set.
+
+External mode changes are trusted to be authoritative; if a user is opped
+by external means, we begin monitoring them for activity. If a user is
+deopped by external means, we trust the change and do not reop.
+
+See L<Alpha::IRC::Reop::Config> for configuration-related details.
+
+=head2 casemap
+
+Retrieves the CASEMAP value currently in use; this is set from ISUPPORT
+details given by the server (or defaults to RFC1459 rules).
+
+=head2 config
+
+Retrieves the L<Alpha::IRC::Reop::Config> object.
+
+=head2 debug
+
+  $alpha->debug( $bool );
+
+Turn debugging on/off or retrieve current debug boolean.
+
+=head2 pocoirc
+
+Retrieves the current L<POE::Component::IRC> object.
+
+=head1 AUTHOR
+
+Jon Portnoy <avenj@cobaltirc.org> per specifications set forth by Joah
+& AlphaChat staff <admin@alphachat.net>
+
+=cut

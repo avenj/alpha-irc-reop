@@ -237,6 +237,77 @@ sub dump_example {
 
 1;
 
+=pod
+
+=head1 NAME
+
+Alpha::IRC::Reop::Config - Alpha::IRC::Reop configuration class
+
+=head1 SYNOPSIS
+
+  my $cfg_obj = Alpha::IRC::Reop::Config->from_file( $cfg_path );
+
+  my $example_cf_file = Alpha::IRC::Reop::Config->dump_example;
+
+=head1 DESCRIPTION
+
+Provides YAML configuration file load facilities and configuration
+accessors.
+
+=head2 Accessors
+
+Accessor methods (at least vaguely matching example configuration file):
+
+  ## Scalar-type
+  nickname
+  username
+  realname
+  server
+  bindaddr
+  ipv6
+  password
+  port
+  ssl
+  nickserv_pass
+
+  ## Array-type
+  ## (Each line parsed via sprintf($line, $channel, $nick)
+  ## at execution time)
+  reop_sequence
+  up_sequence
+  down_sequence
+
+B<set_*> writers are provided for all of these.
+
+=head2 Methods
+
+=head3 channels
+
+Retrieves the hash containing L<Alpha::IRC::Reop::Config::Channel> objects,
+keyed on lowercased channel name.
+
+=head3 dump_example
+
+Returns an example YAML configuration file as a string.
+
+=head3 dumped
+
+Returns the L<Data::Dumper> dumped object, same as calling 
+Dumper($cfg_obj).
+
+=head3 normalize_channels
+
+Normalize the L</channels> hash after retrieving the server's casemap
+value. Takes a casemap (rfc1459, strict-rfc1459, ascii). Should be called
+in an 'irc_001' handler or similar.
+
+=head1 AUTHOR
+
+Jon Portnoy <avenj@cobaltirc.org> per specifications set forth by Joah &
+AlphaChat staff <admin@alphachat.net>
+
+=cut
+
 __DATA__
 ## Example config
 ---
