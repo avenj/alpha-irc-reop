@@ -48,6 +48,10 @@ has 'config' => (
 has 'debug' => (
   is      => 'rw',
   default => sub { 0 },
+  trigger => sub {
+    my ($self, $val) = @_;
+    require POSIX if $val;
+  },
 );
 
 has 'pocoirc' => (
@@ -112,7 +116,9 @@ sub BUILD {
 
 ## Utility methods.
 sub dbwarn (@) {
-  warn map {; ( (caller(1))[3] || '' )." $_\n" } @_
+  my $ti = POSIX::strftime( "%H:%M:%S", localtime );
+  my $ca = (split /::/, ((caller 1)[3] || '') )[-1];
+  warn map {; "$ti $ca $_\n" } @_
 }
 
 sub __clear_all {
