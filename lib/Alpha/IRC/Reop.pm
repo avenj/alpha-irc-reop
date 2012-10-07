@@ -50,6 +50,11 @@ has 'config' => (
   },
 );
 
+has 'debug' => (
+  is      => 'rw',
+  default => sub { 0 },
+);
+
 has 'pocoirc' => (
   lazy      => 1,
   is        => 'ro',
@@ -111,6 +116,10 @@ sub BUILD {
 }
 
 ## Utility methods.
+sub dbwarn (@) {
+  warn @_, "\n"
+}
+
 sub __clear_all {
   my ($self, $channel, $nick) = @_;
 
@@ -119,6 +128,7 @@ sub __clear_all {
   ($channel, $nick) = map { lc_irc($_, $self->casemap) } ($channel, $nick);
 
   for my $type (qw/ _current_ops _pending_ops /) {
+    dbwarn "__clear_all $type $channel $nick" if $self->debug;
     delete $self->$type->{$channel}->{$nick}
       if exists $self->$type->{$channel}->{$nick}
   }
@@ -130,6 +140,8 @@ sub __try_reop {
   ## Try to regain ops via configured means.
 
   return unless $self->config->has_reop_sequence;
+
+  dbwarn "Trying to regain ops" if $self->debug;
 
   for my $line (@{ $self->config->reop_sequence }) {
     $self->pocoirc->yield( sl_high =>
@@ -187,6 +199,10 @@ sub _start {
   ## (which is Session creation time in a running Kernel, or when the
   ## Kernel is ->run() otherwise)
   my ($kernel, $self) = @_[KERNEL, OBJECT];
+
+  if ($self->debug) {
+    dbwarn "CONFIG:\n", $self->config->dumped;
+  }
 
   my $irc = POE::Component::IRC::State->spawn(
     flood    => 1,
@@ -254,6 +270,9 @@ sub irc_001 {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
 
   my $casemap = $self->pocoirc->isupport('CASEMAP') || 'rfc1459';
+
+  dbwarn "initializing CASEMAP $casemap";
+
   $self->set_casemap( $casemap );
   $self->config->normalize_channels( $casemap );
 }
@@ -275,30 +294,37 @@ sub irc_public {
 
     if (exists $self->_current_ops->{$channel}->{$nick}) {
       $self->_current_ops->{$channel}->{$nick} = time();
+      dbwarn "Updated _current_ops $channel $nick" if $self->debug;
       next TARGET
     }
 
     if (exists $self->_pending_ops->{$channel}->{$nick}) {
+      dbwarn "handling pending op $channel $nick" if $self->debug;
+
       delete $self->_pending_ops->{$channel}->{$nick};
 
       unless ($self->pocoirc->is_channel_operator($channel, $own_nick)) {
         $self->__try_reop($channel);
-        ## FIXME should probably move to event-based interface
-        ##  and add a delay after try_reop?
-        ##  would need to track retries and increment timer for them
       }
 
       if ( $self->config->has_up_sequence ) {
+        dbwarn "issuing up_sequence" if $self->debug;
+
         for my $line (@{ $self->config->up_sequence }) {
           $self->pocoirc->yield( sl_high =>
             sprintf($line, $channel, $nick)
           );
         }
       } else {
+        dbwarn "mode bounce -v+o $channel $nick" if $self->debug;
+
         $self->pocoirc->yield( mode => $channel,
           '-v+o', ($nick) x 2
         );
       }
+
+      dbwarn "updating _current_ops for $channel $nick (irc_public)"
+        if $self->debug;
 
       $self->_current_ops->{$channel}->{$nick} = time();
 
@@ -320,6 +346,10 @@ sub irc_chan_sync {
   ## Grab current users-with-status
   for my $nick ( $self->pocoirc->channel_list($chan) ) {
     next unless $self->pocoirc->is_channel_operator($chan, $nick);
+
+    dbwarn "setting up initial _current_ops $chan $nick"
+      if $self->debug;
+
     $nick = lc_irc( $nick, $self->casemap );
     $self->_current_ops->{$chan}->{$nick} = time();
   }
@@ -330,6 +360,9 @@ sub irc_chan_sync {
 
   ## Start checking for idle ops in 20 seconds.
   $kernel->delay_set( 'ac_check_lastseen', 20, $chan );
+
+  dbwarn "timer init for $chan"
+    if $self->debug;
 }
 
 sub irc_kick {
@@ -340,9 +373,13 @@ sub irc_kick {
   ## Same deal as irc_part
 
   if ( eq_irc($nick, $self->pocoirc->nick_name, $self->casemap) ) {
+    dbwarn "clearing metadata for $channel due to KICK"
+      if $self->debug;
+
     for my $type (qw/ _current_ops _pending_ops /) {
       delete $self->$type->{ lc_irc($channel, $self->casemap) }
     }
+
     return
   }
 
@@ -366,10 +403,20 @@ sub irc_chan_mode {
 
   $nick = lc_irc($nick, $self->casemap);
 
+  dbwarn "handling mode change $channel $type $modechr $nick"
+    if $self->debug;
+
   for ($type) {
     when ('+') {
       ## User gained +o ; add to _current_ops
+      dbwarn "irc_chan_mode; _current_ops added $channel $nick"
+        if $self->debug;
+
       $self->_current_ops->{$channel}->{$nick} = time();
+
+      dbwarn "clearing any remaining _pending_ops $channel $nick"
+        if $self->debug;
+
       delete $self->_pending_ops->{$channel}->{$nick}
         if exists $self->_pending_ops->{$channel}->{$nick}
     }
@@ -380,6 +427,9 @@ sub irc_chan_mode {
       ## Doesn't add to pending_ops:
       ##  - If we changed this mode, we tweaked pending_ops
       ##  - If someone else did, trust the change and stop watching
+      dbwarn "irc_chan_mode; _current_ops dropped $channel $nick"
+        if $self->debug;
+
       delete $self->_current_ops->{$channel}->{$nick}
         if exists $self->_current_ops->{$channel}->{$nick}
     }
@@ -400,6 +450,9 @@ sub irc_nick {
     CHAN: for my $channel (map { lc_irc($_, $self->casemap) } @$common) {
       next CHAN unless exists $self->$type->{$channel}->{$old};
 
+      dbwarn "irc_nick adjusted $type $channel $old -> $new"
+        if $self->debug;
+
       $self->$type->{$channel}->{$new} =
         delete $self->$type->{$channel}->{$old}
     } # CHAN
@@ -415,6 +468,8 @@ sub irc_part {
 
   if ( eq_irc($nick, $self->pocoirc->nick_name, $self->casemap) ) {
     ## If this was us, delete the channel.
+    dbwarn "clearing channel $channel due to PART" if $self->debug;
+
     for my $type (qw/ _current_ops _pending_ops/) {
       delete $self->$type->{ lc_irc($channel, $self->casemap) }
     }
@@ -434,6 +489,8 @@ sub irc_quit {
   ## we had in common.
 
   for my $channel (map { lc_irc($_, $self->casemap) } @$common) {
+    dbwarn "clearing all for $channel $nick due to QUIT" if $self->debug;
+
     $self->__clear_all( $channel, $nick );
   }
 }
@@ -448,8 +505,13 @@ sub ac_check_lastseen {
 
   my $channel = $_[ARG0];
 
+  dbwarn "ac_check_lastseen for $channel" if $self->debug;
+
   unless ( $self->pocoirc->channel_list($channel) ) {
     ## Lost this channel. May be a stale timer.
+    dbwarn "no channel_list for $channel, resetting, dropping timer"
+      if $self->debug;
+
     for my $type (qw/ _current_ops _pending_ops/) {
       delete $self->$type->{$channel}
     }
@@ -460,9 +522,6 @@ sub ac_check_lastseen {
   my $own_nick = $self->pocoirc->nick_name;
   unless ( $self->pocoirc->is_channel_operator($channel, $own_nick) ) {
     $self->__try_reop($channel);
-    ## Skip this run and try again when we're hopefully opped.
-    $kernel->delay_set( 'ac_check_lastseen', 15, $channel );
-    return
   }
 
   my @targets;
@@ -478,11 +537,14 @@ sub ac_check_lastseen {
       && grep { eq_irc($_, $nick, $self->casemap) }
         @{ $self->config->excepted } ) {
       ## Excepted nickname.
+      dbwarn " - skipping excepted nick $nick" if $self->debug;
       next
     }
 
     unless ( $self->pocoirc->is_channel_operator($channel, $nick) ) {
       ## User not an operator.
+      dbwarn " - clearing _current_ops $channel $nick (not opped)"
+        if $self->debug;
       delete $self->_current_ops->{$channel}->{$nick};
       next
     }
@@ -494,7 +556,12 @@ sub ac_check_lastseen {
     if (time - $last_ts >= $allowable) {
       ## Exceeded delta, drop modes and add to _pending_ops
 
+      dbwarn " - delta exceeded for $channel $nick, issuing DOWN"
+        if $self->debug;
+
       if ( $self->config->has_down_sequence ) {
+        dbwarn "  - issuing down sequence for $channel $nick"
+          if $self->debug;
 
         for my $line (@{ $self->config->down_sequence }) {
           $self->pocoirc->yield( sl_high =>
@@ -506,11 +573,14 @@ sub ac_check_lastseen {
         push @targets, $nick
       }
 
+      dbwarn "  - setting _pending_ops $channel $nick" if $self->debug;
       $self->_pending_ops->{$channel}->{$nick} = 1;
     }
   }
 
   if (@targets) {
+    dbwarn "  - issuing modes ($channel)" if $self->debug;
+    ## No down sequence, issue batched modes.
     if (@targets == 1) {
       $self->pocoirc->yield( mode => $channel,
         '+v-o', ($targets[0]) x 2
@@ -522,6 +592,7 @@ sub ac_check_lastseen {
   }
 
   ## Check for idle ops again in 15 seconds.
+  dbwarn " - timer reset for $channel" if $self->debug;
   $kernel->delay_set( 'ac_check_lastseen', 15, $channel );
 }
 

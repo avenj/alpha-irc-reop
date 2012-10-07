@@ -10,11 +10,12 @@ use POE;
 use Proc::PID::File;
 
 use Getopt::Long;
-my $opts = { detach => 1 };
+my $opts = { detach => 1, debug => 0 };
 GetOptions( $opts,
   'help',
   'exampleconf|examplecf',
 
+  'debug!',
   'detach!',
   'config=s',
   'piddir=s',
@@ -30,6 +31,7 @@ sub helpme_i_am_in_hell {
     "Invocation\n",
     "  --help            Show this help message",
     "  --exampleconf     Dump an example conf file and exit",
+    "  --debug           Be noisy",
     "  --nodetach        Run in foreground",
     "  --config <FILE>   Configuration file to use",
     "  --piddir <DIR>    PID file storage location [/var/run]",
@@ -70,7 +72,10 @@ sub fire_it_up {
   }
 
   $pid->touch;
-  my $reop = Alpha::IRC::Reop->new( config => $cfg );
+  my $reop = Alpha::IRC::Reop->new(
+    config => $cfg,
+    debug  => $opts->{debug}
+  );
   POE::Kernel->run;
 }
 

@@ -14,6 +14,7 @@ my $build = Module::Build->new(
   requires => {
     perl       => '5.10.1',
     Carp       => 0,
+    Socket     => 2,
 
     strictures              => 1,
     indirect                => 0,
@@ -26,6 +27,7 @@ my $build = Module::Build->new(
     'IRC::Utils'          => 0,
     'POE'                 => '1.3',
     'POE::Component::IRC' => '6.80',
+    'POE::Component::SSLify' => 0,
 
     'Proc::PID::File'     => 0,
 

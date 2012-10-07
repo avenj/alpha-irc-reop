@@ -12,6 +12,8 @@ use IRC::Utils qw/ lc_irc /;
 
 use Alpha::IRC::Reop::Config::Channel;
 
+use Data::Dumper;
+
 ## Nick/ident/gecos
 has 'nickname' => (
   required  => 1,
@@ -135,6 +137,13 @@ has 'excepted' => (
   predicate => 1,
   default   => sub {  []  },
 );
+
+
+sub dumped {
+  my ($self) = @_;
+  Dumper($self)
+}
+
 
 sub normalize_channels {
   my ($self, $casemap) = @_;
