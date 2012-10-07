@@ -115,7 +115,7 @@ sub BUILD {
 }
 
 ## Utility methods.
-sub dbwarn (@) {
+sub dbwarn {
   my $ti = POSIX::strftime( "%H:%M:%S", localtime );
   my $ca = (split /::/, ((caller 1)[3] || '') )[-1];
   warn map {; "$ti $ca $_\n" } @_
