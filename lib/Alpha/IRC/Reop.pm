@@ -404,7 +404,7 @@ sub irc_chan_mode {
 
   $nick = lc_irc($nick, $self->casemap);
 
-  dbwarn "handling mode change $channel $type $modechr $nick"
+  dbwarn "handling mode change $channel ${type}${modechr} $nick"
     if $self->debug;
 
   for ($type) {
