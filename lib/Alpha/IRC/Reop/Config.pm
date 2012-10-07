@@ -249,14 +249,19 @@ Alpha::IRC::Reop::Config - Alpha::IRC::Reop configuration class
 
   my $example_cf_file = Alpha::IRC::Reop::Config->dump_example;
 
+  ## Create example conf from a shell:
+  $ perl -MAlpha::IRC::Reop::Config -e \
+     'print Alpha::IRC::Reop::Config->dump_example' \
+      >> example.cf
+
 =head1 DESCRIPTION
 
 Provides YAML configuration file load facilities and configuration
 accessors.
 
-=head2 Accessors
+=head2 Attributes
 
-Accessor methods (at least vaguely matching example configuration file):
+Readable attributes (at least vaguely matching example configuration file):
 
   ## Scalar-type
   nickname
@@ -277,7 +282,7 @@ Accessor methods (at least vaguely matching example configuration file):
   up_sequence
   down_sequence
 
-B<set_*> writers are provided for all of these.
+B<set_$attrib> writers are provided for all of these.
 
 =head2 Methods
 
