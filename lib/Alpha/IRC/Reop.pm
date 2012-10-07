@@ -120,7 +120,7 @@ sub __clear_all {
 
   ## Used by irc_part/irc_quit.
 
-  ($channel, $nick) = map { lc_irc($_, $self->casemap) } ($channel, $nick);
+  ($channel, $nick) = map {; lc_irc($_, $self->casemap) } ($channel, $nick);
 
   for my $type (qw/ _current_ops _pending_ops /) {
     dbwarn "clearing $type $channel $nick" if $self->debug;
@@ -283,7 +283,7 @@ sub irc_public {
 
   my $own_nick = $self->pocoirc->nick_name;
 
-  TARGET: for my $channel (map { lc_irc($_, $self->casemap) } @$where) {
+  TARGET: for my $channel (map {; lc_irc($_, $self->casemap) } @$where) {
     ## ctcp_action is mapped here; ignore private actions:
     next TARGET unless $channel =~ /^[+&#]/;
 
@@ -439,10 +439,10 @@ sub irc_nick {
   my ($old) = parse_user($src);
 
   ## Track nick changes, update either hash accordingly.
-  ($old, $new) = map { lc_irc($_, $self->casemap) } ($old, $new);
+  ($old, $new) = map {; lc_irc($_, $self->casemap) } ($old, $new);
 
   TYPE: for my $type (qw/ _current_ops _pending_ops /) {
-    CHAN: for my $channel (map { lc_irc($_, $self->casemap) } @$common) {
+    CHAN: for my $channel (map {; lc_irc($_, $self->casemap) } @$common) {
       next CHAN unless exists $self->$type->{$channel}->{$old};
 
       dbwarn "nick adjusted $type $channel $old -> $new"
@@ -463,10 +463,11 @@ sub irc_part {
 
   if ( eq_irc($nick, $self->pocoirc->nick_name, $self->casemap) ) {
     ## If this was us, delete the channel.
+    $channel = lc_irc($channel, $self->casemap);
     dbwarn "clearing channel $channel due to PART" if $self->debug;
 
     for my $type (qw/ _current_ops _pending_ops/) {
-      delete $self->$type->{ lc_irc($channel, $self->casemap) }
+      delete $self->$type->{$channel}
     }
     return
   }
@@ -485,7 +486,7 @@ sub irc_quit {
   ## Same deal as PART, except we have to check channels we knew
   ## we had in common.
 
-  for my $channel (map { lc_irc($_, $self->casemap) } @$common) {
+  for my $channel (map {; lc_irc($_, $self->casemap) } @$common) {
     dbwarn "clearing all for $channel $nick due to QUIT" if $self->debug;
 
     $self->__clear_all( $channel, $nick );
@@ -531,7 +532,7 @@ sub ac_check_lastseen {
     }
 
     if ( $self->config->has_excepted
-      && grep { eq_irc($_, $nick, $self->casemap) }
+      && grep {; eq_irc($_, $nick, $self->casemap) }
         @{ $self->config->excepted } ) {
       ## Excepted nickname.
       dbwarn " - skipping excepted nick $nick" if $self->debug;
