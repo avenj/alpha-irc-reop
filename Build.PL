@@ -25,9 +25,11 @@ my $build = Module::Build->new(
     'namespace::clean'    => '0.23',
 
     'IRC::Utils'          => 0,
-    'POE'                 => '1.3',
-    'POE::Component::IRC' => '6.80',
-    'POE::Component::SSLify' => 0,
+
+    'POE'                         => '1.3',
+    'POE::Component::Client::DNS' => 0,
+    'POE::Component::IRC'         => '6.80',
+    'POE::Component::SSLify'      => 0,
 
     'Proc::PID::File'     => 0,
 
