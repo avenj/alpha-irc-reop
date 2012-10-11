@@ -105,6 +105,22 @@ has 'channels' => (
 ## ARRAY of commands to execute for certain events
 ## Each line is passed channel and nickname respectively & fed to sprintf
 
+has 'limiter_count' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_limiter_count',
+  predicate => 1,
+  default   => sub { 5 },
+);
+
+has 'limiter_secs' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_limiter_secs',
+  predicate => 1,
+  default   => sub { 3 },
+);
+
 has 'reop_sequence' => (
   ## Regain op for ourself.
   lazy      => 1,
@@ -198,6 +214,14 @@ sub from_file {
     );
 
     $opts{channels}->{$channel} = $chan_obj
+  }
+
+  if (ref $cfg->{RateLimit} eq 'HASH') {
+    $opts{limiter_count} = $cfg->{RateLimit}->{Count}
+      if $cfg->{RateLimit}->{Count};
+
+    $opts{limiter_secs} = $cfg->{RateLimit}->{Secs}
+      if $cfg->{RateLimit}->{Secs};
   }
 
   if (ref $cfg->{Sequences} eq 'HASH') {
@@ -337,6 +361,11 @@ Channels:
 
 Excepted:
   - "spork"
+
+RateLimit:
+  ## Allow 'Count' sequence lines in 'Secs' secs
+  Count: 5
+  Secs: 3
 
 Sequences:
   ## Passed channel and nickname respectively
