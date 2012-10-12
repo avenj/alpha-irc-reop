@@ -112,7 +112,7 @@ sub BUILD {
   ## we should call ->_limiter to force construction thereof
 }
 
-sub _add_to_msg_queue {
+sub __add_to_msg_queue {
   my ($self, $channel, $nick, @lines) = @_;
 
   my %base = {
@@ -128,10 +128,8 @@ sub _add_to_msg_queue {
   $poe_kernel->yield( 'ac_push_queue' );
 }
 
-sub _del_from_msg_queue {
+sub __del_from_msg_queue {
   my ($self, $channel, $nick) = @_;
-  ## FIXME grep _msg_queue array to find still-valid chan/nick combos
-  ##  _set_msg_queue with still-valid set
 
   my @still_valid = grep {;
     !eq_irc( $channel, $_->{chan}, $self->casemap )
@@ -146,7 +144,15 @@ sub _del_from_msg_queue {
   $self->_set_msg_queue(\@still_valid);
 }
 
-sub _msg_queue_for {
+sub __send_line {
+  my ($self, $channel, $nick, $line) = @_;
+
+  $self->pocoirc->yield( sl_high =>
+    sprintf( $line, $channel, $nick )
+  )
+}
+
+sub __msg_queue_for {
   my ($self, $channel, $nick) = @_;
 
   my @found_chans = grep {
@@ -170,12 +176,42 @@ sub ac_push_queue {
   return unless $self->_has_msg_queue
     and @{ $self->_msg_queue };
 
-  ## FIXME ask limiter if we're still delayed
-  ##  if so, reset ac_push_queue timer for delay time
-  ##  else get next ref and send it
-  ##  if not delayed after that, yield() another ac_push_queue
-  ##  else set ac_push_queue timer for delay time
-  ##  methods that add to queue should yield ac_push_queue
+  unless ( $self->_has_limiter ) {
+    ## No limiter. Clear queue.
+    while (my $ref = shift @{ $self->_msg_queue }) {
+      $self->__send_line(
+        $ref->{chan},
+        $ref->{nick},
+        $ref->{line}
+      )
+    }
+
+    return
+  }
+
+  if (my $delayed = $self->_limiter->check('send') ) {
+    ## Delayed.
+    $kernel->alarm( 'ac_push_queue', time() + $delayed );
+    return
+  }
+
+  ## Not delayed, get next
+  my $nextref = shift @{ $self->_msg_queue };
+
+  $self->__send_line(
+    $nextref->{chan},
+    $nextref->{nick},
+    $nextref->{line}
+  );
+
+  if (my $delayed = $self->_limiter->check('send') ) {
+    ## Delayed now.
+    $kernel->alarm( 'ac_push_queue', time() + $delayed );
+    return
+  }
+
+  ## Not delayed. yield back.
+  $kernel->yield( 'ac_push_queue' );
 }
 
 ## Create a Session when this object is constructed:
