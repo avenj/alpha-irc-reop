@@ -99,6 +99,7 @@ has '_limiter' => (
   writer    => '_set_limiter',
   predicate => '_has_limiter',
   default   => sub {
+    my ($self) = @_;
     Alpha::IRC::Reop::FloodLimit->new(
       limit => $self->config->limiter_count,
       secs  => $self->config->limiter_secs,
@@ -106,117 +107,14 @@ has '_limiter' => (
   },
 );
 
-sub BUILD {
-  ## FIXME
-  ## If config->has_limiter_count or config->has_limiter_secs,
-  ## we should call ->_limiter to force construction thereof
-}
-
-sub __add_to_msg_queue {
-  my ($self, $channel, $nick, @lines) = @_;
-
-  my %base = {
-    chan => lc_irc($channel, $self->casemap),
-    nick => lc_irc($nick, $self->casemap),
-  };
-
-  for my $line (@lines) {
-    my $ref = { %base, line => $line };
-    push @{ $self->_msg_queue }, $ref;
-  }
-
-  $poe_kernel->yield( 'ac_push_queue' );
-}
-
-sub __del_from_msg_queue {
-  my ($self, $channel, $nick) = @_;
-
-  my @still_valid = grep {;
-    !eq_irc( $channel, $_->{chan}, $self->casemap )
-  } @{ $self->_msg_queue };
-
-  if (defined $nick) {
-    @still_valid = grep {;
-      !eq_irc( $nick, $_->{nick}, $self->casemap )
-    } @still_valid;
-  }
-
-  $self->_set_msg_queue(\@still_valid);
-}
-
-sub __send_line {
-  my ($self, $channel, $nick, $line) = @_;
-
-  $self->pocoirc->yield( sl_high =>
-    sprintf( $line, $channel, $nick )
-  )
-}
-
-sub __msg_queue_for {
-  my ($self, $channel, $nick) = @_;
-
-  my @found_chans = grep {
-    eq_irc( $channel, $_->{chan}, $self->casemap )
-  } @{ $self->_msg_queue };
-
-  if (defined $nick) {
-    my @found_usrs = grep {
-      eq_irc( $nick, $_->{nick}, $self->casemap )
-    } @found_chans;
-
-    return @found_usrs
-  }
-
-  return @found_chans
-}
-
-sub ac_push_queue {
-  my ($kernel, $self) = @_[KERNEL, OBJECT];
-
-  return unless $self->_has_msg_queue
-    and @{ $self->_msg_queue };
-
-  unless ( $self->_has_limiter ) {
-    ## No limiter. Clear queue.
-    while (my $ref = shift @{ $self->_msg_queue }) {
-      $self->__send_line(
-        $ref->{chan},
-        $ref->{nick},
-        $ref->{line}
-      )
-    }
-
-    return
-  }
-
-  if (my $delayed = $self->_limiter->check('send') ) {
-    ## Delayed.
-    $kernel->alarm( 'ac_push_queue', time() + $delayed );
-    return
-  }
-
-  ## Not delayed, get next
-  my $nextref = shift @{ $self->_msg_queue };
-
-  $self->__send_line(
-    $nextref->{chan},
-    $nextref->{nick},
-    $nextref->{line}
-  );
-
-  if (my $delayed = $self->_limiter->check('send') ) {
-    ## Delayed now.
-    $kernel->alarm( 'ac_push_queue', time() + $delayed );
-    return
-  }
-
-  ## Not delayed. yield back.
-  $kernel->yield( 'ac_push_queue' );
-}
 
 ## Create a Session when this object is constructed:
 sub BUILD {
   my ($self) = @_;
+
+  $self->_limiter->expire
+    if $self->config->has_limiter_count
+    or $self->config->has_limiter_secs;
 
   ## Create a POE::Session and assign some states we can enter.
   POE::Session->create(
@@ -250,13 +148,75 @@ sub dbwarn {
   warn map {; "$ti $ca $_\n" } @_
 }
 
+sub __add_to_msg_queue {
+  my ($self, $channel, $nick, @lines) = @_;
+
+  my %base = {
+    chan => lc_irc($channel, $self->casemap),
+    nick => lc_irc($nick, $self->casemap),
+  };
+
+  for my $line (@lines) {
+    dbwarn " - queue add: $channel $nick $line" if $self->debug;
+    my $ref = { %base, line => $line };
+    push @{ $self->_msg_queue }, $ref;
+  }
+}
+
+sub __del_from_msg_queue {
+  my ($self, $channel, $nick) = @_;
+
+  dbwarn " - queue del: $channel $nick" if $self->debug;
+
+  my @still_valid = grep {;
+    !eq_irc( $channel, $_->{chan}, $self->casemap )
+  } @{ $self->_msg_queue };
+
+  if (defined $nick) {
+    @still_valid = grep {;
+      !eq_irc( $nick, $_->{nick}, $self->casemap )
+    } @still_valid;
+  }
+
+  $self->_set_msg_queue(\@still_valid);
+}
+
+sub __send_line {
+  my ($self, $channel, $nick, $line) = @_;
+
+  dbwarn " - sendline: $channel $nick $line" if $self->debug;
+
+  $self->pocoirc->yield( sl_high =>
+    sprintf( $line, $channel, $nick )
+  )
+}
+
+sub __msg_queue_for {
+  my ($self, $channel, $nick) = @_;
+
+  my @found_chans = grep {
+    eq_irc( $channel, $_->{chan}, $self->casemap )
+  } @{ $self->_msg_queue };
+
+  if (defined $nick) {
+    my @found_usrs = grep {
+      eq_irc( $nick, $_->{nick}, $self->casemap )
+    } @found_chans;
+
+    return @found_usrs
+  }
+
+  return @found_chans
+}
+
 sub __clear_all {
   my ($self, $channel, $nick) = @_;
 
   ## Used by irc_part/irc_quit.
-  ## FIXME call msg queue clear also
 
   ($channel, $nick) = map {; lc_irc($_, $self->casemap) } ($channel, $nick);
+
+  $self->__delete_from_msg_queue( $channel, $nick );
 
   for my $type (qw/ _current_ops _pending_ops /) {
     dbwarn "clearing $type $channel $nick" if $self->debug;
@@ -430,11 +390,10 @@ sub irc_public {
     }
 
     if (exists $self->_pending_ops->{$channel}->{$nick}) {
-      ## FIXME
-      ##  This user could have deop commands sitting the msg queue.
-      ##  Maybe the msg queue should associate sequences with users.
-      ##  Then we can just clear the user's pending sequence.
       dbwarn "handling pending op $channel $nick" if $self->debug;
+
+      ## Clear any pending sequences in msg queue.
+      $self->__del_from_msg_queue( $channel, $nick );
 
       delete $self->_pending_ops->{$channel}->{$nick};
 
@@ -449,9 +408,7 @@ sub irc_public {
           ## FIXME should we have a higher-priority queue for these?
           ##  (Re-opping takes precendece over deopping)
           ##  ... or just say fuckit and send it?
-          $self->pocoirc->yield( sl_high =>
-            sprintf($line, $channel, $nick)
-          );
+          $self->__send_line( $channel, $nick, $line );
         }
       } else {
         dbwarn "mode bounce -v+o $channel $nick" if $self->debug;
@@ -477,6 +434,7 @@ sub irc_chan_sync {
   my $chan = lc_irc( $_[ARG0], $self->casemap );
 
   ## Just in case these lists have been fucked with, clear 'em:
+  $self->__del_from_msg_queue( $chan );
   for my $type (qw/ _current_ops _pending_ops /) {
     $self->$type->{$chan} = {}
   }
@@ -501,27 +459,6 @@ sub irc_chan_sync {
 
   dbwarn "timer init for $chan"
     if $self->debug;
-}
-
-sub irc_kick {
-  my ($kernel, $self) = @_[KERNEL, OBJECT];
-  my ($src, $channel) = @_[ARG0, ARG1];
-  my ($nick) = parse_user($src);
-
-  ## Same deal as irc_part
-
-  if ( eq_irc($nick, $self->pocoirc->nick_name, $self->casemap) ) {
-    dbwarn "clearing metadata for $channel due to KICK"
-      if $self->debug;
-
-    for my $type (qw/ _current_ops _pending_ops /) {
-      delete $self->$type->{ lc_irc($channel, $self->casemap) }
-    }
-
-    return
-  }
-
-  $self->__clear_all( $channel, $nick );
 }
 
 sub irc_chan_mode {
@@ -597,6 +534,29 @@ sub irc_nick {
   } # TYPE
 }
 
+sub irc_kick {
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+  my ($src, $channel) = @_[ARG0, ARG1];
+  my ($nick) = parse_user($src);
+
+  ## Same deal as irc_part
+
+  if ( eq_irc($nick, $self->pocoirc->nick_name, $self->casemap) ) {
+    dbwarn "clearing metadata for $channel due to KICK"
+      if $self->debug;
+
+    $self->__delete_from_msg_queue($channel);
+
+    for my $type (qw/ _current_ops _pending_ops /) {
+      delete $self->$type->{ lc_irc($channel, $self->casemap) }
+    }
+
+    return
+  }
+
+  $self->__clear_all( $channel, $nick );
+}
+
 sub irc_part {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
   my ($src, $channel) = @_[ARG0, ARG1];
@@ -608,6 +568,8 @@ sub irc_part {
     ## If this was us, delete the channel.
     $channel = lc_irc($channel, $self->casemap);
     dbwarn "clearing channel $channel due to PART" if $self->debug;
+
+    $self->__delete_from_msg_queue($channel);
 
     for my $type (qw/ _current_ops _pending_ops/) {
       delete $self->$type->{$channel}
@@ -638,6 +600,56 @@ sub irc_quit {
 
 
 ## ac_* states
+
+sub ac_push_queue {
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+
+  return unless $self->_has_msg_queue
+    and @{ $self->_msg_queue };
+
+  dbwarn "ac_push_queue fired" if $self->debug;
+
+  unless ( $self->_has_limiter ) {
+    ## No limiter. Clear queue.
+    dbwarn "do not have limiter; pushing queue" if $self->debug;
+    while (my $ref = shift @{ $self->_msg_queue }) {
+      $self->__send_line(
+        $ref->{chan},
+        $ref->{nick},
+        $ref->{line}
+      )
+    }
+
+    return
+  }
+
+  if (my $delayed = $self->_limiter->check('send') ) {
+    ## Delayed.
+    dbwarn "ac_push_queued delayed $delayed seconds" if $self->debug;
+    $kernel->alarm( 'ac_push_queue', time() + $delayed );
+    return
+  }
+
+  ## Not delayed, get next
+  dbwarn "ac_push_queued pushing one line" if $self->debug;
+  my $nextref = shift @{ $self->_msg_queue };
+
+  $self->__send_line(
+    $nextref->{chan},
+    $nextref->{nick},
+    $nextref->{line}
+  );
+
+  if (my $delayed = $self->_limiter->check('send') ) {
+    ## Delayed now.
+    dbwarn "ac_push_queued delayed $delayed seconds" if $self->debug;
+    $kernel->alarm( 'ac_push_queue', time() + $delayed );
+    return
+  }
+
+  ## Not delayed. yield back.
+  $kernel->yield( 'ac_push_queue' );
+}
 
 sub ac_check_lastseen {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
@@ -704,26 +716,19 @@ sub ac_check_lastseen {
         dbwarn "  - issuing down sequence for $channel $nick"
           if $self->debug;
 
-        ## FIXME push to _msg_queue and yield a queue-push event instead
-        ## 
-        for my $line (@{ $self->config->down_sequence }) {
-          $self->pocoirc->yield( sl_high =>
-            sprintf($line, $channel, $nick)
-          );
-        }
+        $self->__add_to_msg_queue(
+          $channel,
+          $nick,
+          @{ $self->config->down_sequence }
+        ) if @{ $self->config->down_sequence };
 
+        $kernel->yield( 'ac_push_queue' );
       } else {
         push @targets, $nick
       }
 
       dbwarn "  - setting _pending_ops $channel $nick" if $self->debug;
       $self->_pending_ops->{$channel}->{$nick} = 1;
-      ## FIXME
-      ##  Should be able to just check _pending_ops to see if we've
-      ##  already tried to issue a down_sequence for this user?
-      ##  (Could be sitting in _msg_queue)
-      ## Make sure we're munging _pending_ops appropriately if
-      ## this user's status changes
     }
   }
 
