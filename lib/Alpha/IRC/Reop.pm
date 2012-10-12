@@ -147,6 +147,18 @@ sub dbwarn {
   warn map {; "$ti $ca $_\n" } @_
 }
 
+# Queue-related methods
+
+sub __send_line {
+  my ($self, $channel, $nick, $line) = @_;
+
+  dbwarn " - sendline: $channel $nick $line" if $self->debug;
+
+  $self->pocoirc->yield( sl_high =>
+    sprintf( $line, $channel, $nick )
+  )
+}
+
 sub __add_to_msg_queue {
   my ($self, $channel, $nick, @lines) = @_;
 
@@ -179,16 +191,6 @@ sub __del_from_msg_queue {
   }
 
   $self->_set_msg_queue(\@still_valid);
-}
-
-sub __send_line {
-  my ($self, $channel, $nick, $line) = @_;
-
-  dbwarn " - sendline: $channel $nick $line" if $self->debug;
-
-  $self->pocoirc->yield( sl_high =>
-    sprintf( $line, $channel, $nick )
-  )
 }
 
 sub __msg_queue_for {
@@ -240,6 +242,9 @@ sub __try_reop {
     );
   }
 }
+
+
+# Batched mode change utils / convenience methods
 
 sub __issue_modes {
   ## ->__issue_modes($channel, '+', 'v', @nicks)  # f.ex
@@ -624,7 +629,7 @@ sub ac_push_queue {
 
   if (my $delayed = $self->_limiter->check('send') ) {
     ## Delayed.
-    dbwarn "ac_push_queued delayed $delayed seconds" if $self->debug;
+    dbwarn "ac_push_queued (pre) delayed $delayed seconds" if $self->debug;
     $kernel->alarm( 'ac_push_queue', time() + $delayed );
     return
   }
@@ -641,7 +646,7 @@ sub ac_push_queue {
 
   if (my $delayed = $self->_limiter->check('send') ) {
     ## Delayed now.
-    dbwarn "ac_push_queued delayed $delayed seconds" if $self->debug;
+    dbwarn "ac_push_queued (post) delayed $delayed seconds" if $self->debug;
     $kernel->alarm( 'ac_push_queue', time() + $delayed );
     return
   }
