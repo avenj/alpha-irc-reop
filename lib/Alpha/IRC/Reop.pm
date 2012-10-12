@@ -22,7 +22,6 @@ use IRC::Utils qw/
 
 use Scalar::Util 'blessed';
 
-
 use namespace::clean -except => 'meta';
 
 
@@ -100,6 +99,7 @@ has '_limiter' => (
   predicate => '_has_limiter',
   default   => sub {
     my ($self) = @_;
+    require Alpha::IRC::Reop::FloodLimit;
     Alpha::IRC::Reop::FloodLimit->new(
       limit => $self->config->limiter_count,
       secs  => $self->config->limiter_secs,
