@@ -218,7 +218,7 @@ sub __clear_all {
 
   ($channel, $nick) = map {; lc_irc($_, $self->casemap) } ($channel, $nick);
 
-  $self->__delete_from_msg_queue( $channel, $nick );
+  $self->__del_from_msg_queue( $channel, $nick );
 
   for my $type (qw/ _current_ops _pending_ops /) {
     dbwarn "clearing $type $channel $nick" if $self->debug;
@@ -550,7 +550,7 @@ sub irc_kick {
     dbwarn "clearing metadata for $channel due to KICK"
       if $self->debug;
 
-    $self->__delete_from_msg_queue($channel);
+    $self->__del_from_msg_queue($channel);
 
     for my $type (qw/ _current_ops _pending_ops /) {
       delete $self->$type->{ lc_irc($channel, $self->casemap) }
@@ -574,7 +574,7 @@ sub irc_part {
     $channel = lc_irc($channel, $self->casemap);
     dbwarn "clearing channel $channel due to PART" if $self->debug;
 
-    $self->__delete_from_msg_queue($channel);
+    $self->__del_from_msg_queue($channel);
 
     for my $type (qw/ _current_ops _pending_ops/) {
       delete $self->$type->{$channel}
