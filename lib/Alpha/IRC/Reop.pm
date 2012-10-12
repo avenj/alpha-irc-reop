@@ -151,10 +151,10 @@ sub dbwarn {
 sub __add_to_msg_queue {
   my ($self, $channel, $nick, @lines) = @_;
 
-  my %base = {
+  my %base = (
     chan => lc_irc($channel, $self->casemap),
     nick => lc_irc($nick, $self->casemap),
-  };
+  );
 
   for my $line (@lines) {
     dbwarn " - queue add: $channel $nick $line" if $self->debug;
@@ -166,7 +166,8 @@ sub __add_to_msg_queue {
 sub __del_from_msg_queue {
   my ($self, $channel, $nick) = @_;
 
-  dbwarn " - queue del: $channel $nick" if $self->debug;
+  dbwarn " - queue del: $channel ".($nick||'')
+    if $self->debug;
 
   my @still_valid = grep {;
     !eq_irc( $channel, $_->{chan}, $self->casemap )
