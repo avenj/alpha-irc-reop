@@ -732,6 +732,10 @@ sub ac_check_lastseen {
       }
 
       dbwarn "  - setting _pending_ops $channel $nick" if $self->debug;
+
+      ## Kill _current_ops entry; we've issued a deop already.
+      ## If it never takes effect, retrying indefinitely is stupid.
+      delete $self->_current_ops->{$channel}->{$nick};
       $self->_pending_ops->{$channel}->{$nick} = 1;
     }
   }
