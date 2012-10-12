@@ -85,6 +85,98 @@ has '_pending_ops' => (
   default => sub {  {}  },
 );
 
+has '_msg_queue' => (
+  lazy    => 1,
+  is      => 'ro',
+  writer  => '_set_msg_queue',
+  default => sub {  []  },
+);
+
+
+has '_limiter' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => '_set_limiter',
+  predicate => '_has_limiter',
+  default   => sub {
+    Alpha::IRC::Reop::FloodLimit->new(
+      limit => $self->config->limiter_count,
+      secs  => $self->config->limiter_secs,
+    )
+  },
+);
+
+sub BUILD {
+  ## FIXME
+  ## If config->has_limiter_count or config->has_limiter_secs,
+  ## we should call ->_limiter to force construction thereof
+}
+
+sub _add_to_msg_queue {
+  my ($self, $channel, $nick, @lines) = @_;
+
+  my %base = {
+    chan => lc_irc($channel, $self->casemap),
+    nick => lc_irc($nick, $self->casemap),
+  };
+
+  for my $line (@lines) {
+    my $ref = { %base, line => $line };
+    push @{ $self->_msg_queue }, $ref;
+  }
+
+  $poe_kernel->yield( 'ac_push_queue' );
+}
+
+sub _del_from_msg_queue {
+  my ($self, $channel, $nick) = @_;
+  ## FIXME grep _msg_queue array to find still-valid chan/nick combos
+  ##  _set_msg_queue with still-valid set
+
+  my @still_valid = grep {;
+    !eq_irc( $channel, $_->{chan}, $self->casemap )
+  } @{ $self->_msg_queue };
+
+  if (defined $nick) {
+    @still_valid = grep {;
+      !eq_irc( $nick, $_->{nick}, $self->casemap )
+    } @still_valid;
+  }
+
+  $self->_set_msg_queue(\@still_valid);
+}
+
+sub _msg_queue_for {
+  my ($self, $channel, $nick) = @_;
+
+  my @found_chans = grep {
+    eq_irc( $channel, $_->{chan}, $self->casemap )
+  } @{ $self->_msg_queue };
+
+  if (defined $nick) {
+    my @found_usrs = grep {
+      eq_irc( $nick, $_->{nick}, $self->casemap )
+    } @found_chans;
+
+    return @found_usrs
+  }
+
+  return @found_chans
+}
+
+sub ac_push_queue {
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+
+  return unless $self->_has_msg_queue
+    and @{ $self->_msg_queue };
+
+  ## FIXME ask limiter if we're still delayed
+  ##  if so, reset ac_push_queue timer for delay time
+  ##  else get next ref and send it
+  ##  if not delayed after that, yield() another ac_push_queue
+  ##  else set ac_push_queue timer for delay time
+  ##  methods that add to queue should yield ac_push_queue
+}
 
 ## Create a Session when this object is constructed:
 sub BUILD {
@@ -97,6 +189,7 @@ sub BUILD {
         _start
 
         ac_check_lastseen
+        ac_push_queue
 
         irc_001
         irc_chan_mode
@@ -125,6 +218,7 @@ sub __clear_all {
   my ($self, $channel, $nick) = @_;
 
   ## Used by irc_part/irc_quit.
+  ## FIXME call msg queue clear also
 
   ($channel, $nick) = map {; lc_irc($_, $self->casemap) } ($channel, $nick);
 
@@ -300,6 +394,10 @@ sub irc_public {
     }
 
     if (exists $self->_pending_ops->{$channel}->{$nick}) {
+      ## FIXME
+      ##  This user could have deop commands sitting the msg queue.
+      ##  Maybe the msg queue should associate sequences with users.
+      ##  Then we can just clear the user's pending sequence.
       dbwarn "handling pending op $channel $nick" if $self->debug;
 
       delete $self->_pending_ops->{$channel}->{$nick};
@@ -312,6 +410,9 @@ sub irc_public {
         dbwarn "issuing up_sequence" if $self->debug;
 
         for my $line (@{ $self->config->up_sequence }) {
+          ## FIXME should we have a higher-priority queue for these?
+          ##  (Re-opping takes precendece over deopping)
+          ##  ... or just say fuckit and send it?
           $self->pocoirc->yield( sl_high =>
             sprintf($line, $channel, $nick)
           );
@@ -340,7 +441,7 @@ sub irc_chan_sync {
   my $chan = lc_irc( $_[ARG0], $self->casemap );
 
   ## Just in case these lists have been fucked with, clear 'em:
-  for my $type (qw/ _current_ops _pending_ops/) {
+  for my $type (qw/ _current_ops _pending_ops /) {
     $self->$type->{$chan} = {}
   }
 
@@ -567,6 +668,8 @@ sub ac_check_lastseen {
         dbwarn "  - issuing down sequence for $channel $nick"
           if $self->debug;
 
+        ## FIXME push to _msg_queue and yield a queue-push event instead
+        ## 
         for my $line (@{ $self->config->down_sequence }) {
           $self->pocoirc->yield( sl_high =>
             sprintf($line, $channel, $nick)
@@ -579,6 +682,12 @@ sub ac_check_lastseen {
 
       dbwarn "  - setting _pending_ops $channel $nick" if $self->debug;
       $self->_pending_ops->{$channel}->{$nick} = 1;
+      ## FIXME
+      ##  Should be able to just check _pending_ops to see if we've
+      ##  already tried to issue a down_sequence for this user?
+      ##  (Could be sitting in _msg_queue)
+      ## Make sure we're munging _pending_ops appropriately if
+      ## this user's status changes
     }
   }
 
@@ -599,7 +708,6 @@ sub ac_check_lastseen {
   dbwarn " - timer reset for $channel" if $self->debug;
   $kernel->delay_set( 'ac_check_lastseen', 15, $channel );
 }
-
 
 1;
 
