@@ -85,7 +85,6 @@ has '_pending_ops' => (
 );
 
 has '_msg_queue' => (
-  lazy    => 1,
   is      => 'ro',
   writer  => '_set_msg_queue',
   default => sub {  []  },
@@ -605,8 +604,7 @@ sub irc_quit {
 sub ac_push_queue {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
 
-  return unless $self->_has_msg_queue
-    and @{ $self->_msg_queue };
+  return unless @{ $self->_msg_queue };
 
   dbwarn "ac_push_queue fired" if $self->debug;
 
