@@ -652,6 +652,7 @@ sub ac_push_queue {
   }
 
   ## Not delayed. yield back.
+  $kernel->alarm( 'ac_push_queue' );
   $kernel->yield( 'ac_push_queue' );
 }
 
