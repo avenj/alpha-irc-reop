@@ -182,23 +182,15 @@ sub __del_from_msg_queue {
 
   my @valid;
 
-  if (defined $nick) {
+  QITEM: for my $ref (@{ $self->_msg_queue }) {
+    if (defined $nick) {
+      next QITEM if eq_irc( $ref->{nick}, $nick, $self->casemap )
+        and eq_irc( $ref->{chan}, $channel, $self->casemap )
+    } else {
+      next QITEM if eq_irc( $ref->{chan}, $channel, $self->casemap )
+    }
 
-    @valid = grep {
-      my $ref = $_;
-      not eq_irc( $ref->{nick}, $nick, $self->casemap )
-      and not eq_irc( $ref->{chan}, $channel, $self->casemap )
-      or 1
-    } @{ $self->_msg_queue }
-
-  } else {
-
-    @valid = grep {
-      my $ref = $_;
-      not eq_irc( $ref->{chan}, $channel, $self->casemap )
-      or 1
-    } @{ $self->_msg_queue }
-
+    push @valid, $ref
   }
 
   if ($self->debug) {
