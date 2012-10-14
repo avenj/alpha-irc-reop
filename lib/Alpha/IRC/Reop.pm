@@ -168,9 +168,9 @@ sub __add_to_msg_queue {
   );
 
   for my $line (@lines) {
-    dbwarn " - queue add: $channel $nick $line" if $self->debug;
     my $ref = { %base, line => $line };
     push @{ $self->_msg_queue }, $ref;
+    dbwarn " - queue add: $channel ($nick) $line" if $self->debug;
   }
 }
 
@@ -180,35 +180,33 @@ sub __del_from_msg_queue {
   dbwarn " - queue del: $channel ".($nick||'')
     if $self->debug;
 
-  my @still_valid = grep {;
-    !eq_irc( $channel, $_->{chan}, $self->casemap )
-  } @{ $self->_msg_queue };
+  my @valid;
 
   if (defined $nick) {
-    @still_valid = grep {;
-      !eq_irc( $nick, $_->{nick}, $self->casemap )
-    } @still_valid;
+
+    @valid = grep {
+      my $ref = $_;
+      not eq_irc( $ref->{nick}, $nick, $self->casemap )
+      and not eq_irc( $ref->{chan}, $channel, $self->casemap )
+      or 1
+    } @{ $self->_msg_queue }
+
+  } else {
+
+    @valid = grep {
+      my $ref = $_;
+      not eq_irc( $ref->{chan}, $channel, $self->casemap )
+      or 1
+    } @{ $self->_msg_queue }
+
   }
 
-  $self->_set_msg_queue(\@still_valid);
-}
-
-sub __msg_queue_for {
-  my ($self, $channel, $nick) = @_;
-
-  my @found_chans = grep {
-    eq_irc( $channel, $_->{chan}, $self->casemap )
-  } @{ $self->_msg_queue };
-
-  if (defined $nick) {
-    my @found_usrs = grep {
-      eq_irc( $nick, $_->{nick}, $self->casemap )
-    } @found_chans;
-
-    return @found_usrs
+  if ($self->debug) {
+    my $delta = @{ $self->_msg_queue } - @valid;
+    dbwarn "deleted $delta queued items";
   }
 
-  return @found_chans
+  $self->_set_msg_queue( [ @valid ] )
 }
 
 sub __clear_all {
@@ -356,7 +354,7 @@ sub _start {
 
   $irc->yield(register => 'all');
 
-  $irc->yield(connect => {});
+  $irc->yield(connect => +{});
 }
 
 
@@ -635,8 +633,11 @@ sub ac_push_queue {
   }
 
   ## Not delayed, get next
-  dbwarn "ac_push_queued pushing one line" if $self->debug;
+  dbwarn "ac_push_queue pushing one line" if $self->debug;
   my $nextref = shift @{ $self->_msg_queue };
+
+  my $remain = @{ $self->_msg_queue };
+  dbwarn "ac_push_queue: $remain queued items remaining" if $self->debug;
 
   $self->__send_line(
     $nextref->{chan},
@@ -644,16 +645,21 @@ sub ac_push_queue {
     $nextref->{line}
   );
 
-  if (my $delayed = $self->_limiter->check('send') ) {
-    ## Delayed now.
-    dbwarn "ac_push_queued (post) delayed $delayed seconds" if $self->debug;
-    $kernel->alarm( 'ac_push_queue', time() + $delayed );
-    return
-  }
+  if ($remain) {
+    if (my $delayed = $self->_limiter->check('send') ) {
+      ## Delayed now.
+      dbwarn "ac_push_queued (post) delayed $delayed seconds"
+        if $self->debug;
+      $kernel->alarm( 'ac_push_queue', time() + $delayed );
+      return
+    }
 
-  ## Not delayed. yield back.
-  $kernel->alarm( 'ac_push_queue' );
-  $kernel->yield( 'ac_push_queue' );
+    ## Not delayed. yield back.
+    $kernel->alarm( 'ac_push_queue' );
+    $kernel->yield( 'ac_push_queue' );
+  } else {
+    dbwarn "Queue has been emptied" if $self->debug;
+  }
 }
 
 sub ac_check_lastseen {
@@ -727,6 +733,7 @@ sub ac_check_lastseen {
           @{ $self->config->down_sequence }
         ) if @{ $self->config->down_sequence };
 
+        $kernel->alarm( 'ac_push_queue' );
         $kernel->yield( 'ac_push_queue' );
       } else {
         push @targets, $nick
