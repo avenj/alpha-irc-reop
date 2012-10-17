@@ -376,6 +376,7 @@ RateLimit:
   Count: 5
   Secs: 3
 
+## Comment / remove Sequences to just use batched MODEs
 Sequences:
   ## Passed channel and nickname respectively
   ReopSelf:
