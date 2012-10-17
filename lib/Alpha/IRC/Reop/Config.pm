@@ -84,6 +84,14 @@ has 'ssl' => (
   default   => sub { 0 },
 );
 
+has 'umode' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_umode',
+  predicate => 1,
+  default   => sub { '+i' },
+);
+
 ## Misc
 has 'nickserv_pass' => (
   lazy      => 1,
@@ -353,6 +361,7 @@ Remote:
   IPv6: 0
   Password: ~
   NickServ_Pass: "somepassword"
+  UMode: "+i"
 
 Channels:
   '#lobby':

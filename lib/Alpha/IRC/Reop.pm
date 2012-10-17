@@ -182,12 +182,14 @@ sub __del_from_msg_queue {
 
   my @valid;
 
-  QITEM: for my $ref (@{ $self->_msg_queue }) {
+  QITEM: while (my $ref = shift @{ $self->_msg_queue }) {
     if (defined $nick) {
-      next QITEM if eq_irc( $ref->{nick}, $nick, $self->casemap )
+      next QITEM
+        if  eq_irc( $ref->{nick}, $nick, $self->casemap )
         and eq_irc( $ref->{chan}, $channel, $self->casemap )
     } else {
-      next QITEM if eq_irc( $ref->{chan}, $channel, $self->casemap )
+      next QITEM
+        if eq_irc( $ref->{chan}, $channel, $self->casemap )
     }
 
     push @valid, $ref
@@ -361,6 +363,12 @@ sub irc_001 {
 
   $self->set_casemap( $casemap );
   $self->config->normalize_channels( $casemap );
+
+  if ( $self->config->has_umode ) {
+    my $mode = $self->config->umode;
+    my $me   = $self->pocoirc->nick_name;
+    $self->pocoirc->yield( 'mode', $me, $mode );
+  }
 }
 
 sub irc_public {
