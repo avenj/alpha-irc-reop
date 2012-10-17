@@ -346,6 +346,13 @@ sub _start {
     ),
   );
 
+  $irc->plugin_add( 'Connector' =>
+    POE::Component::IRC::Plugin::Connector->new(
+      delay     => 120,
+      reconnect => 20,
+    ),
+  );
+
   $irc->yield(register => 'all');
 
   $irc->yield(connect => +{});
