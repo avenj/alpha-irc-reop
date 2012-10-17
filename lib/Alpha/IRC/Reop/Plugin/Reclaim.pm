@@ -8,62 +8,6 @@ use strictures 1;
 use IRC::Utils                  'parse_user';
 use POE::Component::IRC::Plugin 'PCI_EAT_NONE';
 
-sub altnicks {
-  my ($self, $val) = @_;
-
-  if (defined $val) {
-    confess "altnicks() expected ARRAY"
-      unless ref $val eq 'ARRAY';
-
-    return $self->{_altnicks} = $val
-  }
-
-  $self->{_altnicks}
-}
-
-sub has_altnicks {
-  my ($self) = @_;
-
-  return unless ref $self->{_altnicks} eq 'ARRAY'
-    and @{ $self->{_altnicks} };
-
-  1
-}
-
-sub suffix {
-  my ($self, $val) = @_;
-  return $self->{_suffix} = $val if defined $val;
-  $self->{_suffix}
-}
-
-sub delay {
-  my ($self, $val) = @_;
-  return $self->{_delay} = $val if defined $val;
-  $self->{_delay}
-}
-
-sub _want_nick {
-  my ($self, $val) = @_;
-  return $self->{_wantnick} = $val if defined $val;
-  $self->{_wantnick}
-}
-
-sub _temp_nick {
-  my ($self, $val) = @_;
-  return $self->{_tempnick} = $val if defined $val;
-  $self->{_tempnick};
-}
-
-sub _clear_temp_nick {
-  my ($self) = @_;
-  delete $self->{_tempnick}
-}
-
-sub is_reclaimed {
-  my ($self, $val) = @_;
-  return $self->{_reclaimed} = $val if defined $val;
-  $self->{_reclaimed}
-}
 
 sub new {
   my $class  = shift;
@@ -173,6 +117,65 @@ sub S_quit {
   } elsif (!$self->is_reclaimed && $quitter eq $self->_want_nick) {
     ## FIXME kill any pending alarm, yield nick change immediately
   }
+}
+
+
+## Accessors.
+sub altnicks {
+  my ($self, $val) = @_;
+
+  if (defined $val) {
+    confess "altnicks() expected ARRAY"
+      unless ref $val eq 'ARRAY';
+
+    return $self->{_altnicks} = $val
+  }
+
+  $self->{_altnicks}
+}
+
+sub has_altnicks {
+  my ($self) = @_;
+
+  return unless ref $self->{_altnicks} eq 'ARRAY'
+    and @{ $self->{_altnicks} };
+
+  1
+}
+
+sub suffix {
+  my ($self, $val) = @_;
+  return $self->{_suffix} = $val if defined $val;
+  $self->{_suffix}
+}
+
+sub delay {
+  my ($self, $val) = @_;
+  return $self->{_delay} = $val if defined $val;
+  $self->{_delay}
+}
+
+sub _want_nick {
+  my ($self, $val) = @_;
+  return $self->{_wantnick} = $val if defined $val;
+  $self->{_wantnick}
+}
+
+sub _temp_nick {
+  my ($self, $val) = @_;
+  return $self->{_tempnick} = $val if defined $val;
+  $self->{_tempnick};
+}
+
+sub _clear_temp_nick {
+  my ($self) = @_;
+  delete $self->{_tempnick}
+}
+
+sub is_reclaimed {
+  my ($self, $val) = @_;
+  return $self->{_reclaimed} = $val if defined $val;
+  $self->{_reclaimed}
 }
 
 
