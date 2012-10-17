@@ -372,7 +372,7 @@ sub irc_001 {
   $self->config->normalize_channels( $casemap );
 
   if ( $self->config->has_umode ) {
-    my $mode = $self->config->umode;
+    my $mode = $self->config->umode || '+i';
     my $me   = $self->pocoirc->nick_name;
     $self->pocoirc->yield( 'mode', $me, $mode );
   }
