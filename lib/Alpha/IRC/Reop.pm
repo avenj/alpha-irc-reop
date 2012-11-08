@@ -96,15 +96,17 @@ has '_limiter' => (
   is        => 'ro',
   writer    => '_set_limiter',
   predicate => '_has_limiter',
-  default   => sub {
-    my ($self) = @_;
-    require Alpha::IRC::Reop::FloodLimit;
-    Alpha::IRC::Reop::FloodLimit->new(
+  builder   => '_build_limiter',
+);
+
+sub _build_limiter {
+  my ($self) = @_;
+  require Alpha::IRC::Reop::FloodLimit;
+  Alpha::IRC::Reop::FloodLimit->new(
       limit => $self->config->limiter_count,
       secs  => $self->config->limiter_secs,
-    )
-  },
-);
+  )
+}
 
 
 has '_msg_queue' => (
@@ -912,6 +914,10 @@ sub ac_do_rehash {
   ##  Needs testing.
   my $new_cf = $self->config->from_file($cfpath);
   $self->set_config($new_cf);
+
+  $self->_set_limiter( $self->_build_limiter )
+    if $self->_has_limiter;
+
 }
 
 sub ac_sync_operators {
