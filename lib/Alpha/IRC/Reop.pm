@@ -897,7 +897,6 @@ sub ac_sig_usr {
 
 sub ac_do_rehash {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
-  $kernel->sig_handled;
 
   dbwarn "Attempting rehash . . ." if $self->debug;
 
@@ -917,7 +916,6 @@ sub ac_do_rehash {
 
 sub ac_sync_operators {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
-  $kernel->sig_handled;
 
   dbwarn "Flushing all pending operators (sync)"
     if $self->debug;
