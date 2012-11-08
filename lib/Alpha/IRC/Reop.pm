@@ -215,8 +215,11 @@ sub BUILD {
         _start
 
         ac_check_lastseen
+        ac_sig_hup
+        ac_sig_usr
         ac_do_rehash
         ac_issue_pending_modes
+        ac_sync_operators
         ac_push_queue
 
         irc_001
@@ -230,7 +233,6 @@ sub BUILD {
       / ],
       $self => {
         irc_ctcp_action => 'irc_public',
-        sync_operators  => 'ac_sync_operators',
       },
     ],
   );
@@ -395,8 +397,8 @@ sub _start {
     warn "-> current config:\n", $self->config->dumped;
   }
 
-  $kernel->sig( USR1 => "sync_operators" );
-  $kernel->sig( HUP  => "ac_do_rehash" );
+  $kernel->sig( USR1 => "ac_sig_usr" );
+  $kernel->sig( HUP  => "ac_sig_hup" );
 
   my $irc = POE::Component::IRC::State->spawn(
     flood    => 1,
@@ -882,20 +884,42 @@ sub ac_push_queue {
   }
 }
 
+sub ac_sig_hup {
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+  $kernel->sig_handled;
+  $kernel->yield('ac_do_rehash');
+}
+
+sub ac_sig_usr {
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+  $kernel->yield('ac_sync_operators');
+}
+
 sub ac_do_rehash {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
   $kernel->sig_handled;
 
-  ## FIXME reload Config obj
-  ##  reset all timers with possibly new values
-  ##  Hmm.. should we sync_operators first..?
+  dbwarn "Attempting rehash . . ." if $self->debug;
+
+  my $cfpath;
+  unless ( $self->config->has_from_file_path 
+        && ($cfpath = $self->config->from_file_path) ) {
+    dbwarn "! Cannot rehash, no configuration file path";
+    return
+  }
+
+  ## Fresh Config object.
+  ## FIXME consequences still a bit uncertain in places.
+  ##  Needs testing.
+  my $new_cf = $self->config->from_file($cfpath);
+  $self->set_config($new_cf);
 }
 
 sub ac_sync_operators {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
   $kernel->sig_handled;
 
-  dbwarn "Received SIGUSR1 -- resyncing operators"
+  dbwarn "Flushing all pending operators (sync)"
     if $self->debug;
 
   for my $channel (keys %{ $self->_pending_ops }) {
