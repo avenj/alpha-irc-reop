@@ -2,6 +2,7 @@ package Alpha::IRC::Reop::Plugin::Reclaim;
 ## POE::Component::IRC::Plugin::NickReclaim work-alike
 ##  ... except configurable altnicks
 
+use 5.10.1;
 use Carp;
 use strictures 1;
 
@@ -20,8 +21,8 @@ sub new {
   $params{altnicks} = delete $params{alternates}
     if defined $params{alternates};
   $self->altnicks( $params{altnicks} ) if defined $params{altnicks};
-  $self->delay( $params{delay} // $params{poll} // 30 );
-  $self->suffix( $params{suffix} // '_' );
+  $self->delay( $params{delay} || $params{poll} || 30 );
+  $self->suffix( $params{suffix} || '_' );
 
   $self
 }

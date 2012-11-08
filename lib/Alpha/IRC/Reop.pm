@@ -216,12 +216,13 @@ sub BUILD {
       $self => [ qw/
         _start
 
-        ac_check_lastseen
         ac_sig_hup
-        ac_sig_usr
         ac_do_rehash
-        ac_issue_pending_modes
+        ac_sig_usr
         ac_sync_operators
+
+        ac_check_lastseen
+        ac_issue_pending_modes
         ac_push_queue
 
         irc_001
@@ -488,38 +489,6 @@ sub irc_001 {
   }
 }
 
-sub irc_public {
-  my ($kernel, $self) = @_[KERNEL, OBJECT];
-  my ($src, $where)   = @_[ARG0, ARG1];
-
-  my $nick = lc_irc( parse_user($src), $self->casemap );
-
-  ## If this is a known op update 'lastseen'
-  ## If this is a pending op, reop, move to known ops
-
-  my $own_nick = $self->pocoirc->nick_name;
-
-  my $dirty;
-  TARGET: for my $channel (map {; lc_irc($_, $self->casemap) } @$where) {
-    ## ctcp_action is mapped here; ignore private actions:
-    next TARGET unless $channel =~ /^[+&#]/;
-
-    if (exists $self->_current_ops->{$channel}->{$nick}) {
-      $self->_current_ops->{$channel}->{$nick} = time();
-      dbwarn "updated _current_ops $channel $nick" if $self->debug;
-      next TARGET
-    }
-
-    $self->__do_reop_user($channel, $nick);
-    $dirty = 1;
-  }
-
-  if ($dirty) {
-    $kernel->alarm( 'ac_push_queue' );
-    $kernel->yield( 'ac_push_queue' );
-  }
-}
-
 sub irc_chan_sync {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
   my $chan = lc_irc( $_[ARG0], $self->casemap );
@@ -673,6 +642,38 @@ sub irc_part {
   $self->__clear_all( $channel, $nick );
 }
 
+sub irc_public {
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+  my ($src, $where)   = @_[ARG0, ARG1];
+
+  my $nick = lc_irc( parse_user($src), $self->casemap );
+
+  ## If this is a known op update 'lastseen'
+  ## If this is a pending op, reop, move to known ops
+
+  my $own_nick = $self->pocoirc->nick_name;
+
+  my $dirty;
+  TARGET: for my $channel (map {; lc_irc($_, $self->casemap) } @$where) {
+    ## ctcp_action is mapped here; ignore private actions:
+    next TARGET unless $channel =~ /^[+&#]/;
+
+    if (exists $self->_current_ops->{$channel}->{$nick}) {
+      $self->_current_ops->{$channel}->{$nick} = time();
+      dbwarn "updated _current_ops $channel $nick" if $self->debug;
+      next TARGET
+    }
+
+    $self->__do_reop_user($channel, $nick);
+    $dirty = 1;
+  }
+
+  if ($dirty) {
+    $kernel->alarm( 'ac_push_queue' );
+    $kernel->yield( 'ac_push_queue' );
+  }
+}
+
 sub irc_quit {
   my ($kernel, $self)      = @_[KERNEL, OBJECT];
   my ($src, $msg, $common) = @_[ARG0 .. ARG2];
@@ -691,37 +692,6 @@ sub irc_quit {
 
 
 ## ac_* states
-
-sub ac_issue_pending_modes {
-  my ($kernel, $self) = @_[KERNEL, OBJECT];
-
-  unless (@{ $self->_queued_modes }) {
-    dbwarn "No modes to issue, returning"
-      if $self->debug;
-    return
-  }
-
-  my $chgset = $self->__queued_modes_to_hash;
-
-  my $ccount = keys %$chgset;
-  dbwarn "Issuing queued modes for $ccount channels"
-    if $self->debug;
-
-  for my $channel (keys %$chgset) {
-
-    for my $type (keys %{ $chgset->{$channel} }) {
-      $self->__issue_modes(
-          $channel,
-          $type,
-          $_,
-          @{ $chgset->{$channel}->{$type}->{$_} }
-      ) for keys %{ $chgset->{$channel}->{$type} };
-    }
-
-  }
-
-  $self->_set_queued_modes([]);
-}
 
 sub ac_check_lastseen {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
@@ -884,6 +854,37 @@ sub ac_push_queue {
   } else {
     dbwarn "Queue has been emptied" if $self->debug;
   }
+}
+
+sub ac_issue_pending_modes {
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+
+  unless (@{ $self->_queued_modes }) {
+    dbwarn "No modes to issue, returning"
+      if $self->debug;
+    return
+  }
+
+  my $chgset = $self->__queued_modes_to_hash;
+
+  my $ccount = keys %$chgset;
+  dbwarn "Issuing queued modes for $ccount channels"
+    if $self->debug;
+
+  for my $channel (keys %$chgset) {
+
+    for my $type (keys %{ $chgset->{$channel} }) {
+      $self->__issue_modes(
+          $channel,
+          $type,
+          $_,
+          @{ $chgset->{$channel}->{$type}->{$_} }
+      ) for keys %{ $chgset->{$channel}->{$type} };
+    }
+
+  }
+
+  $self->_set_queued_modes([]);
 }
 
 sub ac_sig_hup {
