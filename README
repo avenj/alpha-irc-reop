@@ -42,6 +42,13 @@ DESCRIPTION
   pocoirc
     Retrieves the current POE::Component::IRC object.
 
+SIGNALS
+  USR1
+    Sending SIGUSR1 causes the pending operator queue to flush immediately.
+
+  HUP
+    Sending SIGHUP causes a configuration file reload and timer reset.
+
 AUTHOR
     Jon Portnoy <avenj@cobaltirc.org> per specifications set forth by Joah &
     AlphaChat staff <admin@alphachat.net>
