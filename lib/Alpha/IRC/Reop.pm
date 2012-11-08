@@ -168,6 +168,9 @@ has '_queued_modes' => (
 sub __add_queued_mode {
   my ($self, $channel, $nick, $flag, $mode) = @_;
 
+  dbwarn "queued mode add: $channel $nick $flag $mode"
+    if $self->debug;
+
   push @{ $self->_queued_modes }, [ $channel, $nick, $flag, $mode ];
 }
 
@@ -341,9 +344,17 @@ sub __do_reop_user {
 sub ac_issue_pending_modes {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
 
-  return unless @{ $self->_queued_modes };
+  unless (@{ $self->_queued_modes }) {
+    dbwarn "No modes to issue, returning"
+      if $self->debug;
+    return
+  }
 
   my $chgset = $self->__queued_modes_to_hash;
+
+  my $ccount = keys %$chgset;
+  dbwarn "Issuing queued modes for $ccount channels"
+    if $self->debug;
 
   for my $channel (keys %$chgset) {
 
@@ -515,6 +526,7 @@ sub irc_public {
 
   my $own_nick = $self->pocoirc->nick_name;
 
+  my $dirty;
   TARGET: for my $channel (map {; lc_irc($_, $self->casemap) } @$where) {
     ## ctcp_action is mapped here; ignore private actions:
     next TARGET unless $channel =~ /^[+&#]/;
@@ -526,6 +538,12 @@ sub irc_public {
     }
 
     $self->__do_reop_user($channel, $nick);
+    $dirty = 1;
+  }
+
+  if ($dirty) {
+    $kernel->alarm( 'ac_push_queue' );
+    $kernel->yield( 'ac_push_queue' );
   }
 }
 
@@ -865,7 +883,6 @@ sub ac_check_lastseen {
 
 sub ac_do_rehash {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
-
   $kernel->sig_handled;
 
   ## FIXME reload Config obj
@@ -875,13 +892,16 @@ sub ac_do_rehash {
 
 sub ac_sync_operators {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
-
   $kernel->sig_handled;
+
+  dbwarn "Received SIGUSR1 -- resyncing operators"
+    if $self->debug;
 
   for my $channel (keys %{ $self->_pending_ops }) {
     $self->__do_reop_user($channel, $_, 'batched')
       for keys %{ $self->_pending_ops->{$channel} };
-    $kernel->call( 'ac_issue_pending_modes' );
+    $kernel->yield( 'ac_push_queue' );
+    $kernel->yield( 'ac_issue_pending_modes' );
   }
 }
 
