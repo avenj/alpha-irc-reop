@@ -273,7 +273,9 @@ sub from_file {
 
 sub dump_example {
   my ($self) = @_;
+  my $pos = tell DATA;
   my @example = readline(DATA);
+  seek(DATA, $pos, 0);
   join '', @example;
 }
 
