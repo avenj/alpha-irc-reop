@@ -286,6 +286,9 @@ Alpha::IRC::Reop::Config - Alpha::IRC::Reop configuration class
      'print Alpha::IRC::Reop::Config->dump_example' \
       >> example.cf
 
+  ## Details on starting the bot from a shell:
+  $ alpha-irc-reop --help
+
 =head1 DESCRIPTION
 
 Provides YAML configuration file load facilities and configuration
@@ -369,7 +372,10 @@ Channels:
     key: ~
 
 Excepted:
-  - "spork"
+  ## A list of nicknames that will not be deopped.
+  ## (Examples prefixed with digits to make them invalid nicks.)
+  - "0spork"
+  - "1avenj"
 
 RateLimit:
   ## Allow 'Count' sequence lines in 'Secs' secs

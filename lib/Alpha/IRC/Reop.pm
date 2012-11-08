@@ -1,5 +1,5 @@
 package Alpha::IRC::Reop;
-our $VERSION = '0.01';
+our $VERSION = '0.03';
 
 use 5.10.1;
 use Carp;
@@ -21,6 +21,12 @@ use IRC::Utils qw/
 /;
 
 use Scalar::Util 'blessed';
+
+sub dbwarn {
+  my $ti = POSIX::strftime( "%H:%M:%S", localtime );
+  my $ca = (split /::/, ((caller 1)[3] || '') )[-1];
+  warn map {; "$ti $ca $_\n" } @_
+}
 
 use namespace::clean -except => 'meta';
 
@@ -84,12 +90,6 @@ has '_pending_ops' => (
   default => sub {  {}  },
 );
 
-has '_msg_queue' => (
-  is      => 'ro',
-  writer  => '_set_msg_queue',
-  default => sub {  []  },
-);
-
 
 has '_limiter' => (
   lazy      => 1,
@@ -107,57 +107,11 @@ has '_limiter' => (
 );
 
 
-## Create a Session when this object is constructed:
-sub BUILD {
-  my ($self) = @_;
-
-  $self->_limiter->expire
-    if $self->config->has_limiter_count
-    or $self->config->has_limiter_secs;
-
-  ## Create a POE::Session and assign some states we can enter.
-  POE::Session->create(
-    object_states => [
-      $self => [ qw/
-        _start
-
-        ac_check_lastseen
-        ac_push_queue
-
-        irc_001
-        irc_chan_mode
-        irc_chan_sync
-        irc_kick
-        irc_nick
-        irc_part
-        irc_public
-        irc_quit
-      / ],
-      $self => {
-        irc_ctcp_action => 'irc_public',
-      },
-    ],
-  );
-}
-
-## Utility methods.
-sub dbwarn {
-  my $ti = POSIX::strftime( "%H:%M:%S", localtime );
-  my $ca = (split /::/, ((caller 1)[3] || '') )[-1];
-  warn map {; "$ti $ca $_\n" } @_
-}
-
-# Queue-related methods
-
-sub __send_line {
-  my ($self, $channel, $nick, $line) = @_;
-
-  dbwarn " - sendline: $channel $nick $line" if $self->debug;
-
-  $self->pocoirc->yield( sl_high =>
-    sprintf( $line, $channel, $nick )
-  )
-}
+has '_msg_queue' => (
+  is      => 'ro',
+  writer  => '_set_msg_queue',
+  default => sub {  []  },
+);
 
 sub __add_to_msg_queue {
   my ($self, $channel, $nick, @lines) = @_;
@@ -203,6 +157,95 @@ sub __del_from_msg_queue {
   $self->_set_msg_queue( [ @valid ] )
 }
 
+
+has '_queued_modes' => (
+  ## [ [ $chan, $nick, $flag, $mode ], [ ... ] ]
+  is      => 'ro',
+  writer  => '_set_queued_modes',
+  default => sub {  []  },
+);
+
+sub __add_queued_mode {
+  my ($self, $channel, $nick, $flag, $mode) = @_;
+
+  push @{ $self->_queued_modes }, [ $channel, $nick, $flag, $mode ];
+}
+
+sub __queued_modes_to_hash {
+  my ($self) = @_;
+
+  ## Return a hash like:
+  ##  {
+  ##    '#channel' => {
+  ##      '+' => {
+  ##        'o' => [ nick1, nick2 ... ],
+  ##      },
+  ##      '-' => {
+  ##        'v' => [ nick1, nick2 ... ],
+  ##      },
+  ##    },
+  ##    ...
+  ##  }
+
+  my $chgset = {};
+  for my $mset (@{ $self->_queued_modes }) {
+    my ($channel, $nick, $flag, $mode) = @$mset;
+    push @{ $chgset->{$channel}->{$flag}->{$mode} }, $nick;
+  }
+
+  $chgset
+}
+
+
+## Create a Session when this object is constructed:
+sub BUILD {
+  my ($self) = @_;
+
+  $self->_limiter->expire
+    if $self->config->has_limiter_count
+    or $self->config->has_limiter_secs;
+
+  ## Create a POE::Session and assign some states we can enter.
+  POE::Session->create(
+    object_states => [
+      $self => [ qw/
+        _start
+
+        ac_check_lastseen
+        ac_do_rehash
+        ac_issue_pending_modes
+        ac_push_queue
+
+        irc_001
+        irc_chan_mode
+        irc_chan_sync
+        irc_kick
+        irc_nick
+        irc_part
+        irc_public
+        irc_quit
+      / ],
+      $self => {
+        irc_ctcp_action => 'irc_public',
+        sync_operators  => 'ac_sync_operators',
+      },
+    ],
+  );
+}
+
+
+## Utility methods.
+
+sub __send_line {
+  my ($self, $channel, $nick, $line) = @_;
+
+  dbwarn " - sendline: $channel $nick $line" if $self->debug;
+
+  $self->pocoirc->yield( sl_high =>
+    sprintf( $line, $channel, $nick )
+  )
+}
+
 sub __clear_all {
   my ($self, $channel, $nick) = @_;
 
@@ -219,7 +262,7 @@ sub __clear_all {
   }
 }
 
-sub __try_reop {
+sub __try_reop_self {
   my ($self, $channel) = @_;
 
   ## Try to regain ops via configured means.
@@ -237,6 +280,86 @@ sub __try_reop {
 
 
 # Batched mode change utils / convenience methods
+
+sub __do_reop_user {
+  my ($self, $channel, $nick, $batched) = @_;
+
+  unless (exists $self->_pending_ops->{$channel}->{$nick}) {
+    dbwarn "possible bug?",
+           "__do_reop_user called for non-pending op: $channel - $nick";
+    return
+  }
+
+  dbwarn "handling pending op $channel $nick" if $self->debug;
+
+  ## Clear any pending sequences in msg queue.
+  $self->__del_from_msg_queue( $channel, $nick );
+  ## ... and this _pending_ops entry:
+  delete $self->_pending_ops->{$channel}->{$nick};
+
+  my $own_nick = $self->pocoirc->nick_name;
+
+  unless ($self->pocoirc->is_channel_operator($channel, $own_nick)) {
+    $self->__try_reop_self($channel);
+  }
+
+  if ( $self->config->has_up_sequence ) {
+    dbwarn "issuing up_sequence" if $self->debug;
+
+    for my $line (@{ $self->config->up_sequence }) {
+      ## Currently unqueued; reopping is considered to be a 
+      ## high-priority sort of deal.
+      if ($batched) {
+        $self->__add_to_msg_queue($channel, $nick, $line);
+      } else {
+        ## Send now.
+        $self->__send_line( $channel, $nick, $line );
+      }
+    }
+  } else {
+    dbwarn "mode bounce -v+o $channel $nick" if $self->debug;
+
+    if ($batched) {
+      ## Add to mode change queue.
+      ## (ac_issue_pending_modes has to be triggered from our caller)
+      $self->__add_queued_mode( $channel, $nick, '-', 'v');
+      $self->__add_queued_mode( $channel, $nick, '+', 'o');
+    } else {
+      ## Single change, send it now.
+      $self->pocoirc->yield( mode => $channel,
+        '-v+o', ($nick) x 2
+      );
+    }
+  }
+
+  dbwarn "updating _current_ops for $channel $nick (irc_public)"
+    if $self->debug;
+
+  $self->_current_ops->{$channel}->{$nick} = time();
+}
+
+sub ac_issue_pending_modes {
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+
+  return unless @{ $self->_queued_modes };
+
+  my $chgset = $self->__queued_modes_to_hash;
+
+  for my $channel (keys %$chgset) {
+
+    for my $type (keys %{ $chgset->{$channel} }) {
+      $self->__issue_modes(
+          $channel,
+          $type,
+          $_,
+          @{ $chgset->{$channel}->{$type}->{$_} }
+      ) for keys %{ $chgset->{$channel}->{$type} };
+    }
+
+  }
+
+  $self->_set_queued_modes([]);
+}
 
 sub __issue_modes {
   ## ->__issue_modes($channel, '+', 'v', @nicks)  # f.ex
@@ -291,6 +414,9 @@ sub _start {
   if ($self->debug) {
     warn "-> current config:\n", $self->config->dumped;
   }
+
+  $kernel->sig( USR1 => "sync_operators" );
+  $kernel->sig( HUP  => "ac_do_rehash" );
 
   my $irc = POE::Component::IRC::State->spawn(
     flood    => 1,
@@ -399,44 +525,8 @@ sub irc_public {
       next TARGET
     }
 
-    if (exists $self->_pending_ops->{$channel}->{$nick}) {
-      dbwarn "handling pending op $channel $nick" if $self->debug;
-
-      ## Clear any pending sequences in msg queue.
-      $self->__del_from_msg_queue( $channel, $nick );
-
-      delete $self->_pending_ops->{$channel}->{$nick};
-
-      unless ($self->pocoirc->is_channel_operator($channel, $own_nick)) {
-        $self->__try_reop($channel);
-      }
-
-      if ( $self->config->has_up_sequence ) {
-        dbwarn "issuing up_sequence" if $self->debug;
-
-        for my $line (@{ $self->config->up_sequence }) {
-          ## FIXME should we have a higher-priority queue for these?
-          ##  (Re-opping takes precendece over deopping)
-          ##  ... or just say fuckit and send it?
-          $self->__send_line( $channel, $nick, $line );
-        }
-      } else {
-        dbwarn "mode bounce -v+o $channel $nick" if $self->debug;
-
-        $self->pocoirc->yield( mode => $channel,
-          '-v+o', ($nick) x 2
-        );
-      }
-
-      dbwarn "updating _current_ops for $channel $nick (irc_public)"
-        if $self->debug;
-
-      $self->_current_ops->{$channel}->{$nick} = time();
-
-      next TARGET
-    }
-
-  } # TARGET
+    $self->__do_reop_user($channel, $nick);
+  }
 }
 
 sub irc_chan_sync {
@@ -461,7 +551,7 @@ sub irc_chan_sync {
   }
 
   my $own_nick = $self->pocoirc->nick_name;
-  $self->__try_reop($chan)
+  $self->__try_reop_self($chan)
     unless $self->pocoirc->is_channel_operator( $chan, $own_nick );
 
   ## Start checking for idle ops in 20 seconds.
@@ -506,7 +596,7 @@ sub irc_chan_mode {
         if exists $self->_pending_ops->{$channel}->{$nick}
     }
     when ('-') {
-      $self->__try_reop($channel)
+      $self->__try_reop_self($channel)
         if eq_irc( $nick, $self->pocoirc->nick_name, $self->casemap );
       ## Remove from _current_ops
       ## Doesn't add to pending_ops:
@@ -692,7 +782,7 @@ sub ac_check_lastseen {
 
   my $own_nick = $self->pocoirc->nick_name;
   unless ( $self->pocoirc->is_channel_operator($channel, $own_nick) ) {
-    $self->__try_reop($channel);
+    $self->__try_reop_self($channel);
   }
 
   my @targets;
@@ -773,6 +863,28 @@ sub ac_check_lastseen {
   $kernel->delay_set( 'ac_check_lastseen', 15, $channel );
 }
 
+sub ac_do_rehash {
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+
+  $kernel->sig_handled;
+
+  ## FIXME reload Config obj
+  ##  reset all timers with possibly new values
+  ##  Hmm.. should we sync_operators first..?
+}
+
+sub ac_sync_operators {
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+
+  $kernel->sig_handled;
+
+  for my $channel (keys %{ $self->_pending_ops }) {
+    $self->__do_reop_user($channel, $_, 'batched')
+      for keys %{ $self->_pending_ops->{$channel} };
+    $kernel->call( 'ac_issue_pending_modes' );
+  }
+}
+
 1;
 
 =pod
@@ -827,6 +939,16 @@ Turn debugging on/off or retrieve current debug boolean.
 =head2 pocoirc
 
 Retrieves the current L<POE::Component::IRC> object.
+
+=head1 SIGNALS
+
+=head2 USR1
+
+Sending SIGUSR1 causes the pending operator queue to flush immediately.
+
+=head2 HUP
+
+Sending SIGHUP causes a configuration file reload and timer reset.
 
 =head1 AUTHOR
 
