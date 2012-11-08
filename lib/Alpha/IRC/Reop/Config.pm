@@ -14,6 +14,8 @@ use Alpha::IRC::Reop::Config::Channel;
 
 use Data::Dumper;
 
+use File::Spec;
+
 ## Nick/ident/gecos
 has 'nickname' => (
   required  => 1,
@@ -153,13 +155,20 @@ has 'down_sequence' => (
   predicate => 1,
 );
 
-
 has 'excepted' => (
   lazy      => 1,
   is        => 'ro',
   writer    => 'set_excepted',
   predicate => 1,
   default   => sub {  []  },
+);
+
+has 'from_file_path' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_from_file_path',
+  predicate => 1,
+  default   => sub { () },
 );
 
 
@@ -258,7 +267,8 @@ sub from_file {
     } # TYPE
   }
 
-  $class->new(%opts)
+  my $fullpath = File::Spec->rel2abs($path);
+  $class->new(from_file_path => $fullpath, %opts)
 }
 
 sub dump_example {
@@ -285,6 +295,9 @@ Alpha::IRC::Reop::Config - Alpha::IRC::Reop configuration class
   $ perl -MAlpha::IRC::Reop::Config -e \
      'print Alpha::IRC::Reop::Config->dump_example' \
       >> example.cf
+
+  ## Details on starting the bot from a shell:
+  $ alpha-irc-reop --help
 
 =head1 DESCRIPTION
 
@@ -369,7 +382,10 @@ Channels:
     key: ~
 
 Excepted:
-  - "spork"
+  ## A list of nicknames that will not be deopped.
+  ## (Examples prefixed with digits to make them invalid nicks.)
+  - "0spork"
+  - "1avenj"
 
 RateLimit:
   ## Allow 'Count' sequence lines in 'Secs' secs
