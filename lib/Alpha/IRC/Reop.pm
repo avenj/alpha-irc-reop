@@ -341,37 +341,6 @@ sub __do_reop_user {
   $self->_current_ops->{$channel}->{$nick} = time();
 }
 
-sub ac_issue_pending_modes {
-  my ($kernel, $self) = @_[KERNEL, OBJECT];
-
-  unless (@{ $self->_queued_modes }) {
-    dbwarn "No modes to issue, returning"
-      if $self->debug;
-    return
-  }
-
-  my $chgset = $self->__queued_modes_to_hash;
-
-  my $ccount = keys %$chgset;
-  dbwarn "Issuing queued modes for $ccount channels"
-    if $self->debug;
-
-  for my $channel (keys %$chgset) {
-
-    for my $type (keys %{ $chgset->{$channel} }) {
-      $self->__issue_modes(
-          $channel,
-          $type,
-          $_,
-          @{ $chgset->{$channel}->{$type}->{$_} }
-      ) for keys %{ $chgset->{$channel}->{$type} };
-    }
-
-  }
-
-  $self->_set_queued_modes([]);
-}
-
 sub __issue_modes {
   ## ->__issue_modes($channel, '+', 'v', @nicks)  # f.ex
   my ($self, $channel, $type, $mode, @nicknames) = @_;
@@ -719,62 +688,35 @@ sub irc_quit {
 
 ## ac_* states
 
-sub ac_push_queue {
+sub ac_issue_pending_modes {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
 
-  return unless @{ $self->_msg_queue };
-
-  dbwarn "ac_push_queue fired" if $self->debug;
-
-  unless ( $self->_has_limiter ) {
-    ## No limiter. Clear queue.
-    dbwarn "do not have limiter; pushing queue" if $self->debug;
-    while (my $ref = shift @{ $self->_msg_queue }) {
-      $self->__send_line(
-        $ref->{chan},
-        $ref->{nick},
-        $ref->{line}
-      )
-    }
-
+  unless (@{ $self->_queued_modes }) {
+    dbwarn "No modes to issue, returning"
+      if $self->debug;
     return
   }
 
-  if (my $delayed = $self->_limiter->check('send') ) {
-    ## Delayed.
-    dbwarn "ac_push_queued (pre) delayed $delayed seconds" if $self->debug;
-    $kernel->alarm( 'ac_push_queue', time() + $delayed );
-    return
-  }
+  my $chgset = $self->__queued_modes_to_hash;
 
-  ## Not delayed, get next
-  dbwarn "ac_push_queue pushing one line" if $self->debug;
-  my $nextref = shift @{ $self->_msg_queue };
+  my $ccount = keys %$chgset;
+  dbwarn "Issuing queued modes for $ccount channels"
+    if $self->debug;
 
-  my $remain = @{ $self->_msg_queue };
-  dbwarn "ac_push_queue: $remain queued items remaining" if $self->debug;
+  for my $channel (keys %$chgset) {
 
-  $self->__send_line(
-    $nextref->{chan},
-    $nextref->{nick},
-    $nextref->{line}
-  );
-
-  if ($remain) {
-    if (my $delayed = $self->_limiter->check('send') ) {
-      ## Delayed now.
-      dbwarn "ac_push_queued (post) delayed $delayed seconds"
-        if $self->debug;
-      $kernel->alarm( 'ac_push_queue', time() + $delayed );
-      return
+    for my $type (keys %{ $chgset->{$channel} }) {
+      $self->__issue_modes(
+          $channel,
+          $type,
+          $_,
+          @{ $chgset->{$channel}->{$type}->{$_} }
+      ) for keys %{ $chgset->{$channel}->{$type} };
     }
 
-    ## Not delayed. yield back.
-    $kernel->alarm( 'ac_push_queue' );
-    $kernel->yield( 'ac_push_queue' );
-  } else {
-    dbwarn "Queue has been emptied" if $self->debug;
   }
+
+  $self->_set_queued_modes([]);
 }
 
 sub ac_check_lastseen {
@@ -879,6 +821,65 @@ sub ac_check_lastseen {
   ## Check for idle ops again in 15 seconds.
   dbwarn " - timer reset for $channel" if $self->debug;
   $kernel->delay_set( 'ac_check_lastseen', 15, $channel );
+}
+
+
+sub ac_push_queue {
+  my ($kernel, $self) = @_[KERNEL, OBJECT];
+
+  return unless @{ $self->_msg_queue };
+
+  dbwarn "ac_push_queue fired" if $self->debug;
+
+  unless ( $self->_has_limiter ) {
+    ## No limiter. Clear queue.
+    dbwarn "do not have limiter; pushing queue" if $self->debug;
+    while (my $ref = shift @{ $self->_msg_queue }) {
+      $self->__send_line(
+        $ref->{chan},
+        $ref->{nick},
+        $ref->{line}
+      )
+    }
+
+    return
+  }
+
+  if (my $delayed = $self->_limiter->check('send') ) {
+    ## Delayed.
+    dbwarn "ac_push_queued (pre) delayed $delayed seconds" if $self->debug;
+    $kernel->alarm( 'ac_push_queue', time() + $delayed );
+    return
+  }
+
+  ## Not delayed, get next
+  dbwarn "ac_push_queue pushing one line" if $self->debug;
+  my $nextref = shift @{ $self->_msg_queue };
+
+  my $remain = @{ $self->_msg_queue };
+  dbwarn "ac_push_queue: $remain queued items remaining" if $self->debug;
+
+  $self->__send_line(
+    $nextref->{chan},
+    $nextref->{nick},
+    $nextref->{line}
+  );
+
+  if ($remain) {
+    if (my $delayed = $self->_limiter->check('send') ) {
+      ## Delayed now.
+      dbwarn "ac_push_queued (post) delayed $delayed seconds"
+        if $self->debug;
+      $kernel->alarm( 'ac_push_queue', time() + $delayed );
+      return
+    }
+
+    ## Not delayed. yield back.
+    $kernel->alarm( 'ac_push_queue' );
+    $kernel->yield( 'ac_push_queue' );
+  } else {
+    dbwarn "Queue has been emptied" if $self->debug;
+  }
 }
 
 sub ac_do_rehash {
