@@ -710,13 +710,13 @@ sub ac_issue_pending_modes {
 
   for my $channel (keys %$chgset) {
 
-    for my $type (keys %{ $chgset->{$channel} }) {
+    for my $type (sort keys %{ $chgset->{$channel} }) {
       $self->__issue_modes(
           $channel,
           $type,
           $_,
           @{ $chgset->{$channel}->{$type}->{$_} }
-      ) for sort keys %{ $chgset->{$channel}->{$type} };
+      ) for keys %{ $chgset->{$channel}->{$type} };
     }
 
   }
