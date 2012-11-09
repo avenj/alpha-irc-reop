@@ -716,7 +716,7 @@ sub ac_issue_pending_modes {
           $type,
           $_,
           @{ $chgset->{$channel}->{$type}->{$_} }
-      ) for keys %{ $chgset->{$channel}->{$type} };
+      ) for sort keys %{ $chgset->{$channel}->{$type} };
     }
 
   }
