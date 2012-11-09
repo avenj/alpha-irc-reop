@@ -44,6 +44,7 @@ has 'casemap' => (
 has 'config' => (
   required => 1,
   is       => 'ro',
+  writer   => 'set_config',
   isa      => sub {
     blessed $_[0] and $_[0]->isa('Alpha::IRC::Reop::Config')
     or confess "$_[0] is not an Alpha::IRC::Reop::Config"
