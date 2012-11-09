@@ -330,8 +330,8 @@ sub __do_reop_user {
     if ($batched) {
       ## Add to mode change queue.
       ## (ac_issue_pending_modes has to be triggered from our caller)
-      $self->__add_queued_mode( $channel, $nick, '-', 'v');
       $self->__add_queued_mode( $channel, $nick, '+', 'o');
+      $self->__add_queued_mode( $channel, $nick, '-', 'v');
     } else {
       ## Single change, send it now.
       $self->pocoirc->yield( mode => $channel,
