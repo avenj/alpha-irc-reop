@@ -1,0 +1,10 @@
+## INSTALL for alpha-irc-reop
+
+This is packaged like any other Perl dist, but generally considered not 
+useful to a broad audience and not released on CPAN:
+
+  $ git clone https://github.com/avenj/alpha-irc-reop.git
+  $ cd alpha-irc-reop
+  $ cpan .
+  $ alpha-irc-reop --help
+  $ alpha-irc-reop --exampleconf > my_new.conf

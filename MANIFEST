@@ -7,6 +7,7 @@ lib/Alpha/IRC/Reop/FloodLimit.pm
 MANIFEST			This list of files
 t/01_loadable.t
 Makefile.PL
+INSTALL
 README
 META.yml
 META.json
