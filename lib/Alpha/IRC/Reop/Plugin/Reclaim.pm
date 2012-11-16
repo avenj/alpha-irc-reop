@@ -51,6 +51,9 @@ sub U_nick {
   my ($self, undef, $nref) = @_;
   my ($nick) = $$nref =~ /^NICK +(.+)/i;
 
+  ## Component is attempting to send NICK
+  ## Adjust our _want_nick
+
   if (! defined $self->_temp_nick || $self->_temp_nick ne $nick) {
     $self->_clear_temp_nick;
     $self->_want_nick( $nick );
@@ -116,6 +119,7 @@ sub S_quit {
   if ($quitter eq $irc->nick_name) {
     ## FIXME we're gone, kill any pending alarm
   } elsif (!$self->is_reclaimed && $quitter eq $self->_want_nick) {
+    ## Our target nickname just quit.
     ## FIXME kill any pending alarm, yield nick change immediately
   }
 }

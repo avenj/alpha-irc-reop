@@ -340,7 +340,7 @@ sub __do_reop_user {
     }
   }
 
-  dbwarn "updating _current_ops for $channel $nick (irc_public)"
+  dbwarn "updating _current_ops for $channel $nick"
     if $self->debug;
 
   $self->_current_ops->{$channel}->{$nick} = time();
