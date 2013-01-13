@@ -28,7 +28,7 @@ sub dbwarn {
   warn map {; "$ti $ca $_\n" } @_
 }
 
-use namespace::clean -except => 'meta';
+use namespace::clean;
 
 
 ## Attribs (public)

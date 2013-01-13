@@ -4,17 +4,16 @@ use Carp;
 use 5.10.1;
 
 use Moo;
-use strictures 1;
 
-use YAML::XS qw/LoadFile/;
-
-use IRC::Utils qw/ lc_irc /;
+use YAML::XS   'LoadFile';
+use IRC::Utils 'lc_irc';
 
 use Alpha::IRC::Reop::Config::Channel;
 
 use Data::Dumper;
-
 use File::Spec;
+
+use namespace::clean;
 
 ## Nick/ident/gecos
 has 'nickname' => (
