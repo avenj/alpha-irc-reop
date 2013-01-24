@@ -287,7 +287,7 @@ sub __try_reop_self {
 }
 
 sub __do_chan_sync {
-  my ($self, $channel) = @_;
+  my ($self, $chan) = @_;
 
   ## Just in case these lists have been fucked with, clear 'em:
   $self->__del_from_msg_queue( $chan );
@@ -310,16 +310,12 @@ sub __do_chan_sync {
   $self->__try_reop_self($chan)
     unless $self->pocoirc->is_channel_operator( $chan, $own_nick );
 
-  ## Start checking for idle ops in 20 seconds.
-  $kernel->delay_set( 'ac_check_lastseen', 20, $chan );
-  dbwarn "timer init for $chan" if $self->debug;
-
   return 1 unless $self->config->has_onsync_sequence;
-  dbwarn "issuing channel on-sync for $channel" if $self->debug;
+  dbwarn "issuing channel on-sync for $chan" if $self->debug;
 
   for my $line (@{ $self->config->onsync_sequence }) {
     $self->pocoirc->yield( sl_high =>
-      sprintf($line, $channel, $self->pocoirc->nick_name)
+      sprintf($line, $chan, $self->pocoirc->nick_name)
     );
   }
 
@@ -564,6 +560,10 @@ sub irc_public {
 sub irc_chan_sync {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
   my $chan = lc_irc( $_[ARG0], $self->casemap );
+ 
+  ## Start checking for idle ops in 20 seconds.
+  $kernel->delay_set( 'ac_check_lastseen', 20, $chan );
+  dbwarn "timer init for $chan" if $self->debug;
 
   $self->__do_chan_sync($chan);
 }
