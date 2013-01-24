@@ -1,5 +1,5 @@
 package Alpha::IRC::Reop;
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 use 5.10.1;
 use Carp;
@@ -286,6 +286,46 @@ sub __try_reop_self {
   }
 }
 
+sub __do_chan_sync {
+  my ($self, $channel) = @_;
+
+  ## Just in case these lists have been fucked with, clear 'em:
+  $self->__del_from_msg_queue( $chan );
+  for my $type (qw/ _current_ops _pending_ops /) {
+    $self->$type->{$chan} = {}
+  }
+
+  ## Grab current users-with-status
+  for my $nick ( $self->pocoirc->channel_list($chan) ) {
+    next unless $self->pocoirc->is_channel_operator($chan, $nick);
+
+    dbwarn "setting up initial _current_ops $chan $nick"
+      if $self->debug;
+
+    $nick = lc_irc( $nick, $self->casemap );
+    $self->_current_ops->{$chan}->{$nick} = time();
+  }
+
+  my $own_nick = $self->pocoirc->nick_name;
+  $self->__try_reop_self($chan)
+    unless $self->pocoirc->is_channel_operator( $chan, $own_nick );
+
+  ## Start checking for idle ops in 20 seconds.
+  $kernel->delay_set( 'ac_check_lastseen', 20, $chan );
+  dbwarn "timer init for $chan" if $self->debug;
+
+  return 1 unless $self->config->has_onsync_sequence;
+  dbwarn "issuing channel on-sync for $channel" if $self->debug;
+
+  for my $line (@{ $self->config->onsync_sequence }) {
+    $self->pocoirc->yield( sl_high =>
+      sprintf($line, $channel, $self->pocoirc->nick_name)
+    );
+  }
+
+  1
+}
+
 
 # Batched mode change utils / convenience methods
 
@@ -525,32 +565,7 @@ sub irc_chan_sync {
   my ($kernel, $self) = @_[KERNEL, OBJECT];
   my $chan = lc_irc( $_[ARG0], $self->casemap );
 
-  ## Just in case these lists have been fucked with, clear 'em:
-  $self->__del_from_msg_queue( $chan );
-  for my $type (qw/ _current_ops _pending_ops /) {
-    $self->$type->{$chan} = {}
-  }
-
-  ## Grab current users-with-status
-  for my $nick ( $self->pocoirc->channel_list($chan) ) {
-    next unless $self->pocoirc->is_channel_operator($chan, $nick);
-
-    dbwarn "setting up initial _current_ops $chan $nick"
-      if $self->debug;
-
-    $nick = lc_irc( $nick, $self->casemap );
-    $self->_current_ops->{$chan}->{$nick} = time();
-  }
-
-  my $own_nick = $self->pocoirc->nick_name;
-  $self->__try_reop_self($chan)
-    unless $self->pocoirc->is_channel_operator( $chan, $own_nick );
-
-  ## Start checking for idle ops in 20 seconds.
-  $kernel->delay_set( 'ac_check_lastseen', 20, $chan );
-
-  dbwarn "timer init for $chan"
-    if $self->debug;
+  $self->__do_chan_sync($chan);
 }
 
 sub irc_chan_mode {

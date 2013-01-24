@@ -138,6 +138,13 @@ has 'reop_sequence' => (
   predicate => 1,
 );
 
+has 'onsync_sequence' => (
+  lazy      => 1,
+  is        => 'ro',
+  writer    => 'set_onsync_sequence',
+  predicate => 1,
+);
+
 has 'up_sequence' => (
   ## Re-up an active operator.
   lazy      => 1,
@@ -248,6 +255,11 @@ sub from_file {
       SEQ: {
         if ($type eq 'ReopSelf') {
           $opts{reop_sequence} = delete $cfg->{Sequences}->{$type};
+          last SEQ
+        }
+
+        if ($type eq 'OnChannelSync') {
+          $opts{onsync_sequence} = delete $cfg->{Sequences}->{$type};
           last SEQ
         }
 
@@ -396,6 +408,9 @@ Sequences:
   ## Passed channel and nickname respectively
   ReopSelf:
     - PRIVMSG ChanServ :OP %s %s
+
+  OnChannelSync:
+    - PRIVMSG ChanServ :SYNC %s
 
   UpUser:
     - PRIVMSG ChanServ :OP %s %s
