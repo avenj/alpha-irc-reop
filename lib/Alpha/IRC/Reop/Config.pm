@@ -381,6 +381,7 @@ Remote:
   Server: "irc.alphachat.net"
   Port: 6667
   BindAddr: ~
+  ## SSL requires POE::Component::SSLify
   SSL: 0
   IPv6: 0
   Password: ~

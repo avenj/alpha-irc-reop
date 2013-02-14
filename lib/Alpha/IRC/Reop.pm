@@ -24,6 +24,7 @@ use Scalar::Util 'blessed';
 
 sub dbwarn {
   my $ti = POSIX::strftime( "%H:%M:%S", localtime );
+  ## I'm not sorry:
   my $ca = (split /::/, ((caller 1)[3] || '') )[-1];
   warn map {; "$ti $ca $_\n" } @_
 }
@@ -71,8 +72,6 @@ has 'pocoirc' => (
   },
 );
 
-
-## Attribs (private)
 
 ## These two hashes are keyed such that: ->{$channel}{$nick} = $value
 has '_current_ops' => (
@@ -241,8 +240,6 @@ sub BUILD {
   );
 }
 
-
-## Utility methods.
 
 sub __send_line {
   my ($self, $channel, $nick, $line) = @_;

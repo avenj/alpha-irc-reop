@@ -29,11 +29,14 @@ my $build = Module::Build->new(
     'POE'                         => '1.3',
     'POE::Component::Client::DNS' => 0,
     'POE::Component::IRC'         => '6.80',
-    'POE::Component::SSLify'      => 0,
 
     'Proc::PID::File'     => 0,
 
     'YAML::XS'            => 0,
+  },
+
+  recommends => {
+    'POE::Component::SSLify' => 0,
   },
 );
 
