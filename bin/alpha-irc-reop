@@ -6,6 +6,7 @@ use strictures 1;
 use File::Spec;
 
 use POE;
+use POSIX ();
 
 use Proc::PID::File;
 
@@ -58,7 +59,6 @@ sub fire_it_up {
   my $cfg  = Alpha::IRC::Reop::Config->from_file( $opts->{config} );
 
   if ($opts->{detach}) {
-    require POSIX;
     my $fork = fork;
     exit 1 if not defined $fork;
     exit 0 if $fork;
@@ -67,9 +67,9 @@ sub fire_it_up {
     exit 1 if not defined $fork;
     exit 0 if $fork;
     chdir('/');
-    open(STDIN, '<', '/dev/null');
-    open(STDOUT, '>>', '/dev/null');
-    open(STDERR, '>>', '/dev/null');
+#    open(STDIN, '<', '/dev/null');
+#    open(STDOUT, '>>', '/dev/null');
+#    open(STDERR, '>>', '/dev/null');
     umask(022);
   }
 
