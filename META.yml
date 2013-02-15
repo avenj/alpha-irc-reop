@@ -1,0 +1,47 @@
+---
+abstract: 'Silly reop bot because I love Joah.'
+author:
+  - 'Fidel Castro <avenj@cobaltirc.org>'
+build_requires: {}
+configure_requires:
+  Module::Build: 0.40
+dynamic_config: 1
+generated_by: 'Module::Build version 0.4003, CPAN::Meta::Converter version 2.120921'
+license: perl
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Alpha-IRC-Reop
+provides:
+  Alpha::IRC::Reop:
+    file: lib/Alpha/IRC/Reop.pm
+    version: 0.03
+  Alpha::IRC::Reop::Config:
+    file: lib/Alpha/IRC/Reop/Config.pm
+    version: 0
+  Alpha::IRC::Reop::Config::Channel:
+    file: lib/Alpha/IRC/Reop/Config/Channel.pm
+    version: 0
+  Alpha::IRC::Reop::FloodLimit:
+    file: lib/Alpha/IRC/Reop/FloodLimit.pm
+    version: 0
+requires:
+  Carp: 0
+  IRC::Utils: 0
+  Moo: 1
+  POE: 1.3
+  POE::Component::Client::DNS: 0
+  POE::Component::IRC: 6.80
+  POE::Component::SSLify: 0
+  Proc::PID::File: 0
+  Socket: 2
+  YAML::XS: 0
+  bareword::filehandles: 0
+  indirect: 0
+  multidimensional: 0
+  namespace::clean: 0.23
+  perl: v5.10.1
+  strictures: 1
+resources:
+  license: http://dev.perl.org/licenses/
+version: 0.03
