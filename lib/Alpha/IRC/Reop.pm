@@ -947,7 +947,7 @@ sub ac_sync_operators {
   }
 }
 
-1;
+no warnings 'void'; qq[ rest easy, Stephanie. ];
 
 =pod
 
